@@ -10,8 +10,8 @@ package protoenum
 import (
 	"slices"
 
+	"github.com/yylego/erero"
 	"github.com/yylego/protoenum/internal/utils"
-	"github.com/yylego/must"
 	"github.com/yylego/tern/slicetern"
 )
 
@@ -37,15 +37,15 @@ type Enums[P ProtoEnum, B comparable, M any] struct {
 // NewEnums creates a new Enums collection from the given Enum instances
 // Builds indexed maps enabling efficient lookup using proto, code, name, and basic value
 // The first item becomes the default value if provided
-// Returns a reference to the created Enums collection, usable in lookup operations
+// Returns an error if duplicate proto, code, name, or basic values are detected
 //
 // 从给定的 Enum 实例创建新的 Enums 集合
 // 构建索引映射以通过 proto、代码、名称和 basic 枚举值高效查找
 // 如果提供了参数，第一个项成为默认值
-// 返回创建的 Enums 集合指针，可用于各种查找操作
-func NewEnums[P ProtoEnum, B comparable, M any](params ...*Enum[P, B, M]) *Enums[P, B, M] {
+// 如果检测到重复的 proto、代码、名称或 basic 值则返回错误
+func NewEnums[P ProtoEnum, B comparable, M any](params ...*Enum[P, B, M]) (*Enums[P, B, M], error) {
 	res := &Enums[P, B, M]{
-		enumElements: slices.Clone(params), // Clone the slice to preserve the defined sequence of enum elements // 克隆切片以保持枚举元素的定义次序
+		enumElements: slices.Clone(params), // Clone the slice to preserve the defined sequence // 克隆切片以保持枚举元素的定义次序
 		mapProtoEnum: make(map[P]*Enum[P, B, M], len(params)),
 		mapCode2Enum: make(map[int32]*Enum[P, B, M], len(params)),
 		mapName2Enum: make(map[string]*Enum[P, B, M], len(params)),
@@ -54,187 +54,135 @@ func NewEnums[P ProtoEnum, B comparable, M any](params ...*Enum[P, B, M]) *Enums
 		defaultValid: nil,
 	}
 	for _, enum := range params {
-		must.Full(enum)
-
-		// Check proto collision // 检查 proto 枚举冲突
-		must.Null(res.mapProtoEnum[enum.Proto()])
+		if enum == nil {
+			return nil, erero.New("ENUM ELEMENT IS MISSING")
+		}
+		if _, ok := res.mapProtoEnum[enum.Proto()]; ok {
+			return nil, erero.Errorf("DUPLICATE PROTO ENUM: %v", enum.Proto())
+		}
 		res.mapProtoEnum[enum.Proto()] = enum
-		// Check code collision // 检查代码冲突
-		must.Null(res.mapCode2Enum[enum.Code()])
+		if _, ok := res.mapCode2Enum[enum.Code()]; ok {
+			return nil, erero.Errorf("DUPLICATE ENUM CODE: %v", enum.Code())
+		}
 		res.mapCode2Enum[enum.Code()] = enum
-		// Check name collision // 检查名称冲突
-		must.Null(res.mapName2Enum[enum.Name()])
+		if _, ok := res.mapName2Enum[enum.Name()]; ok {
+			return nil, erero.Errorf("DUPLICATE ENUM NAME: %v", enum.Name())
+		}
 		res.mapName2Enum[enum.Name()] = enum
-		// Check basic collision // 检查 basic 枚举冲突
-		must.Null(res.mapBasicEnum[enum.Basic()])
+		if _, ok := res.mapBasicEnum[enum.Basic()]; ok {
+			return nil, erero.Errorf("DUPLICATE BASIC ENUM: %v", enum.Basic())
+		}
 		res.mapBasicEnum[enum.Basic()] = enum
 	}
-	return res
+	return res, nil
 }
 
 // LookupByProto finds an Enum using its Protocol Buffer enum value
 // Returns the Enum and true if found, nil and false otherwise
-// Use this when you need to check existence before accessing the value
 //
 // 通过 Protocol Buffer 枚举值查找 Enum
 // 找到时返回 Enum 和 true，否则返回 nil 和 false
-// 当需要在访问值之前检查是否存在时使用此方法
 func (c *Enums[P, B, M]) LookupByProto(proto P) (*Enum[P, B, M], bool) {
-	if res, ok := c.mapProtoEnum[proto]; ok {
-		return must.Full(res), true
-	}
-	return nil, false
+	res, ok := c.mapProtoEnum[proto]
+	return res, ok
 }
 
 // GetByProto finds an Enum using its Protocol Buffer enum value
-// Uses the enum's numeric code when searching in the collection
 // Returns default value if the enum is not found in the collection
-// Panics if no default value has been configured
+// Returns nil if no default value has been configured
 //
 // 通过 Protocol Buffer 枚举值检索 Enum
-// 使用枚举的数字代码在集合中查找
 // 如果在集合中找不到枚举则返回默认值
-// 如果未配置默认值则会 panic
+// 如果未配置默认值则返回 nil
 func (c *Enums[P, B, M]) GetByProto(proto P) *Enum[P, B, M] {
 	if res, ok := c.mapProtoEnum[proto]; ok {
-		return must.Full(res)
+		return res
 	}
-	return c.GetDefault()
-}
-
-// MustGetByProto finds an Enum using its Protocol Buffer enum value
-// Panics if the enum is not found in the collection
-//
-// 通过 Protocol Buffer 枚举值检索 Enum
-// 如果在集合中找不到枚举则会 panic
-func (c *Enums[P, B, M]) MustGetByProto(proto P) *Enum[P, B, M] {
-	return must.Nice(c.mapProtoEnum[proto])
+	return c.defaultValue
 }
 
 // LookupByCode finds an Enum using its numeric code
 // Returns the Enum and true if found, nil and false otherwise
-// Use this when you need to check existence before accessing the value
 //
 // 通过数字代码查找 Enum
 // 找到时返回 Enum 和 true，否则返回 nil 和 false
-// 当需要在访问值之前检查是否存在时使用此方法
 func (c *Enums[P, B, M]) LookupByCode(code int32) (*Enum[P, B, M], bool) {
-	if res, ok := c.mapCode2Enum[code]; ok {
-		return must.Full(res), true
-	}
-	return nil, false
+	res, ok := c.mapCode2Enum[code]
+	return res, ok
 }
 
 // GetByCode finds an Enum using its numeric code
-// Performs direct map lookup using the int32 code value
 // Returns default value if no enum with the given code exists
-// Panics if no default value has been configured
+// Returns nil if no default value has been configured
 //
 // 通过数字代码检索 Enum
-// 使用 int32 代码值执行直接映射查找
 // 如果不存在具有给定代码的枚举则返回默认值
-// 如果未配置默认值则会 panic
+// 如果未配置默认值则返回 nil
 func (c *Enums[P, B, M]) GetByCode(code int32) *Enum[P, B, M] {
 	if res, ok := c.mapCode2Enum[code]; ok {
-		return must.Full(res)
+		return res
 	}
-	return c.GetDefault()
-}
-
-// MustGetByCode finds an Enum using its numeric code
-// Panics if no enum with the given code exists
-//
-// 通过数字代码检索 Enum
-// 如果不存在具有给定代码的枚举则会 panic
-func (c *Enums[P, B, M]) MustGetByCode(code int32) *Enum[P, B, M] {
-	return must.Nice(c.mapCode2Enum[code])
+	return c.defaultValue
 }
 
 // LookupByName finds an Enum using its string name
 // Returns the Enum and true if found, nil and false otherwise
-// Use this when you need to check existence before accessing the value
 //
 // 通过字符串名称查找 Enum
 // 找到时返回 Enum 和 true，否则返回 nil 和 false
-// 当需要在访问值之前检查是否存在时使用此方法
 func (c *Enums[P, B, M]) LookupByName(name string) (*Enum[P, B, M], bool) {
-	if res, ok := c.mapName2Enum[name]; ok {
-		return must.Full(res), true
-	}
-	return nil, false
+	res, ok := c.mapName2Enum[name]
+	return res, ok
 }
 
 // GetByName finds an Enum using its string name
-// Performs direct map lookup using the enum name string
 // Returns default value if no enum with the given name exists
-// Panics if no default value has been configured
+// Returns nil if no default value has been configured
 //
 // 通过字符串名称检索 Enum
-// 使用枚举名称字符串执行直接映射查找
 // 如果不存在具有给定名称的枚举则返回默认值
-// 如果未配置默认值则会 panic
+// 如果未配置默认值则返回 nil
 func (c *Enums[P, B, M]) GetByName(name string) *Enum[P, B, M] {
 	if res, ok := c.mapName2Enum[name]; ok {
-		return must.Full(res)
+		return res
 	}
-	return c.GetDefault()
-}
-
-// MustGetByName finds an Enum using its string name
-// Panics if no enum with the given name exists
-//
-// 通过字符串名称检索 Enum
-// 如果不存在具有给定名称的枚举则会 panic
-func (c *Enums[P, B, M]) MustGetByName(name string) *Enum[P, B, M] {
-	return must.Nice(c.mapName2Enum[name])
+	return c.defaultValue
 }
 
 // LookupByBasic finds an Enum using its Go native enum value
 // Returns the Enum and true if found, nil and false otherwise
-// Use this when you need to check existence before accessing the value
 //
 // 通过 Go 原生枚举值查找 Enum
 // 找到时返回 Enum 和 true，否则返回 nil 和 false
-// 当需要在访问值之前检查是否存在时使用此方法
 func (c *Enums[P, B, M]) LookupByBasic(basic B) (*Enum[P, B, M], bool) {
-	if res, ok := c.mapBasicEnum[basic]; ok {
-		return must.Full(res), true
-	}
-	return nil, false
+	res, ok := c.mapBasicEnum[basic]
+	return res, ok
 }
 
 // GetByBasic finds an Enum using its Go native enum value
-// Performs direct map lookup using the basic enum value
 // Returns default value if no enum with the given basic enum exists
-// Panics if no default value has been configured
+// Returns nil if no default value has been configured
 //
 // 通过 Go 原生枚举值检索 Enum
-// 使用 basic 枚举值执行直接映射查找
 // 如果不存在具有给定 basic 枚举的枚举则返回默认值
-// 如果未配置默认值则会 panic
+// 如果未配置默认值则返回 nil
 func (c *Enums[P, B, M]) GetByBasic(basic B) *Enum[P, B, M] {
 	if res, ok := c.mapBasicEnum[basic]; ok {
-		return must.Full(res)
+		return res
 	}
-	return c.GetDefault()
-}
-
-// MustGetByBasic finds an Enum using its Go native enum value
-// Panics if no enum with the given basic enum exists
-//
-// 通过 Go 原生枚举值检索 Enum
-// 如果不存在具有给定 basic 枚举的枚举则会 panic
-func (c *Enums[P, B, M]) MustGetByBasic(basic B) *Enum[P, B, M] {
-	return must.Nice(c.mapBasicEnum[basic])
+	return c.defaultValue
 }
 
 // GetDefault returns the current default Enum value
-// Panics if no default value has been configured
+// Returns error if no default value has been configured
 //
 // 返回当前的默认 Enum 值
-// 如果未配置默认值则会 panic
-func (c *Enums[P, B, M]) GetDefault() *Enum[P, B, M] {
-	return must.Full(c.defaultValue)
+// 如果未配置默认值则返回错误
+func (c *Enums[P, B, M]) GetDefault() (*Enum[P, B, M], error) {
+	if c.defaultValue == nil {
+		return nil, erero.New("NO DEFAULT VALUE CONFIGURED")
+	}
+	return c.defaultValue, nil
 }
 
 // ListProtos returns a slice containing each protoEnum value in the defined sequence

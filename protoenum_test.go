@@ -3,9 +3,9 @@ package protoenum_test
 import (
 	"testing"
 
+	"github.com/stretchr/testify/require"
 	"github.com/yylego/protoenum"
 	"github.com/yylego/protoenum/protos/protoenumstatus"
-	"github.com/stretchr/testify/require"
 )
 
 // TestNewEnum tests the creation and basic methods of Enum instance

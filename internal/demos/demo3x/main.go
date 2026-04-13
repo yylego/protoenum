@@ -3,6 +3,7 @@ package main
 import (
 	"github.com/yylego/protoenum"
 	"github.com/yylego/protoenum/protos/protoenumstatus"
+	"github.com/yylego/rese"
 	"github.com/yylego/zaplog"
 	"go.uber.org/zap"
 )
@@ -29,35 +30,27 @@ func (c *MetaI18n) English() string { return c.enUS }
 
 // Build enum collection with custom English/Chinese metadata
 // 构建带有自定义中英文元数据的枚举集合
-var enums = protoenum.NewEnums(
+var enums = rese.P1(protoenum.NewEnums(
 	protoenum.NewEnumWithMeta(protoenumstatus.StatusEnum_UNKNOWN, StatusTypeUnknown, &MetaI18n{zhCN: "未知", enUS: "Unknown"}),
 	protoenum.NewEnumWithMeta(protoenumstatus.StatusEnum_SUCCESS, StatusTypeSuccess, &MetaI18n{zhCN: "成功", enUS: "Success"}),
 	protoenum.NewEnumWithMeta(protoenumstatus.StatusEnum_FAILURE, StatusTypeFailure, &MetaI18n{zhCN: "失败", enUS: "Failure"}),
-)
+))
 
 func main() {
-	// Lookup using Go native enum value (type-safe)
-	// 按 Go 原生枚举值查找（类型安全查找）
 	success := enums.GetByBasic(StatusTypeSuccess)
 	zaplog.LOG.Debug("basic", zap.String("msg", string(success.Basic())))
 	zaplog.LOG.Debug("zh-CN", zap.String("msg", success.Meta().Chinese()))
 	zaplog.LOG.Debug("en-US", zap.String("msg", success.Meta().English()))
 
-	// Lookup using enum code (returns default when not found)
-	// 按枚举代码查找（找不到时返回默认值）
 	failure := enums.GetByCode(int32(protoenumstatus.StatusEnum_FAILURE))
 	zaplog.LOG.Debug("basic", zap.String("msg", string(failure.Basic())))
 	zaplog.LOG.Debug("zh-CN", zap.String("msg", failure.Meta().Chinese()))
 	zaplog.LOG.Debug("en-US", zap.String("msg", failure.Meta().English()))
 
-	// Business logic with native enum
-	// 使用原生枚举的业务逻辑
 	if success.Basic() == StatusTypeSuccess {
 		zaplog.LOG.Debug("done")
 	}
 
-	// List valid basic enum values (excluding default)
-	// 列出有效的 basic 枚举值（排除默认值）
 	validBasics := enums.ListValidBasics()
 	for _, basic := range validBasics {
 		zaplog.LOG.Debug("valid", zap.String("basic", string(basic)))
