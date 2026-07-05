@@ -20,19 +20,18 @@ test-with-flags:
 # PROTOBUF CODE GENERATION
 # ========================================
 
-# Install protoc-gen-go plugin
-# 安装 protoc-gen-go 插件
-.PHONY: install
-install:
-	go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
-	@echo "protoc-gen-go 安装完成!"
+# Install buf (protobuf code generation)
+# 安装 buf 工具
+.PHONY: init
+init:
+	go install github.com/bufbuild/buf/cmd/buf@latest
+	@echo "buf 安装完成!"
 
 # Generate Go code from proto files
 # 从 proto 文件生成 Go 代码
 .PHONY: generate
 generate:
-	cd protos && protoc --go_out=paths=source_relative:. protoenumstatus/protoenumstatus.proto
-	cd protos && protoc --go_out=paths=source_relative:. protoenumresult/protoenumresult.proto
+	buf generate
 	@echo "protobuf 代码生成完成!"
 
 # Remove generated .pb.go files
@@ -49,7 +48,7 @@ clean:
 help:
 	@echo "Available targets:"
 	@echo "  test     - Run tests with coverage"
-	@echo "  install  - Install protoc-gen-go plugin"
+	@echo "  init     - Install buf (protobuf code generation)"
 	@echo "  generate - Generate Go code from proto files"
 	@echo "  clean    - Remove generated .pb.go files"
 	@echo "  help     - Show this help message"

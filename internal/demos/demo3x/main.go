@@ -34,7 +34,7 @@ var enums = rese.P1(protoenum.NewEnums(
 	protoenum.NewEnumWithMeta(protoenumstatus.StatusEnum_UNKNOWN, StatusTypeUnknown, &MetaI18n{zhCN: "未知", enUS: "Unknown"}),
 	protoenum.NewEnumWithMeta(protoenumstatus.StatusEnum_SUCCESS, StatusTypeSuccess, &MetaI18n{zhCN: "成功", enUS: "Success"}),
 	protoenum.NewEnumWithMeta(protoenumstatus.StatusEnum_FAILURE, StatusTypeFailure, &MetaI18n{zhCN: "失败", enUS: "Failure"}),
-))
+)).WithDefault()
 
 func main() {
 	success := enums.GetByBasic(StatusTypeSuccess)
@@ -51,7 +51,7 @@ func main() {
 		zaplog.LOG.Debug("done")
 	}
 
-	validBasics := enums.ListValidBasics()
+	validBasics := enums.ListNonDefaultBasics()
 	for _, basic := range validBasics {
 		zaplog.LOG.Debug("valid", zap.String("basic", string(basic)))
 	}

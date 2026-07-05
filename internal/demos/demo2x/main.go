@@ -24,7 +24,7 @@ var enums = rese.P1(protoenum.NewEnums(
 	protoenum.NewEnumWithDesc(protoenumresult.ResultEnum_PASS, ResultTypePass, "通过"),
 	protoenum.NewEnumWithDesc(protoenumresult.ResultEnum_MISS, ResultTypeMiss, "出错"),
 	protoenum.NewEnumWithDesc(protoenumresult.ResultEnum_SKIP, ResultTypeSkip, "跳过"),
-))
+)).WithDefault()
 
 func main() {
 	skip := enums.GetByCode(int32(protoenumresult.ResultEnum_SKIP))

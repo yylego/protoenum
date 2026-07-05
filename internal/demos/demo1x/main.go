@@ -24,7 +24,7 @@ var enums = rese.P1(protoenum.NewEnums(
 	protoenum.NewEnum(protoenumstatus.StatusEnum_UNKNOWN, StatusTypeUnknown),
 	protoenum.NewEnum(protoenumstatus.StatusEnum_SUCCESS, StatusTypeSuccess),
 	protoenum.NewEnum(protoenumstatus.StatusEnum_FAILURE, StatusTypeFailure),
-))
+)).WithDefault()
 
 func main() {
 	item := enums.GetByCode(int32(protoenumstatus.StatusEnum_SUCCESS))

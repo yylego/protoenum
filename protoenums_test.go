@@ -183,7 +183,7 @@ func TestEnums_ListBasics(t *testing.T) {
 	require.Equal(t, ResultTypeSkip, basicEnums[3])
 }
 
-func TestEnums_ListValidProtos(t *testing.T) {
+func TestEnums_ListNonDefaultProtos(t *testing.T) {
 	type ResultType string
 
 	const (
@@ -200,21 +200,29 @@ func TestEnums_ListValidProtos(t *testing.T) {
 		protoenum.NewEnum(protoenumresult.ResultEnum_SKIP, ResultTypeSkip),
 	)
 	require.NoError(t, err)
+	enums.WithDefault()
 
-	protoEnums := enums.ListValidProtos()
+	protoEnums := enums.ListNonDefaultProtos()
 	t.Log(protoEnums)
 	require.Len(t, protoEnums, 3)
 	require.Equal(t, protoenumresult.ResultEnum_PASS, protoEnums[0])
 	require.Equal(t, protoenumresult.ResultEnum_MISS, protoEnums[1])
 	require.Equal(t, protoenumresult.ResultEnum_SKIP, protoEnums[2])
 
-	require.NoError(t, enums.UnsetDefault())
-	allEnums := enums.ListValidProtos()
+	// NoDefault: no default to exclude, so ListNonDefault returns each element
+	enumsNoDefault, err := protoenum.NewEnums(
+		protoenum.NewEnum(protoenumresult.ResultEnum_UNKNOWN, ResultTypeUnknown),
+		protoenum.NewEnum(protoenumresult.ResultEnum_PASS, ResultTypePass),
+		protoenum.NewEnum(protoenumresult.ResultEnum_MISS, ResultTypeMiss),
+		protoenum.NewEnum(protoenumresult.ResultEnum_SKIP, ResultTypeSkip),
+	)
+	require.NoError(t, err)
+	allEnums := enumsNoDefault.ListNonDefaultProtos()
 	t.Log(allEnums)
 	require.Len(t, allEnums, 4)
 }
 
-func TestEnums_ListValidBasics(t *testing.T) {
+func TestEnums_ListNonDefaultBasics(t *testing.T) {
 	type ResultType string
 
 	const (
@@ -231,16 +239,24 @@ func TestEnums_ListValidBasics(t *testing.T) {
 		protoenum.NewEnum(protoenumresult.ResultEnum_SKIP, ResultTypeSkip),
 	)
 	require.NoError(t, err)
+	enums.WithDefault()
 
-	validBasics := enums.ListValidBasics()
+	validBasics := enums.ListNonDefaultBasics()
 	t.Log(validBasics)
 	require.Len(t, validBasics, 3)
 	require.Equal(t, ResultTypePass, validBasics[0])
 	require.Equal(t, ResultTypeMiss, validBasics[1])
 	require.Equal(t, ResultTypeSkip, validBasics[2])
 
-	require.NoError(t, enums.UnsetDefault())
-	allBasics := enums.ListValidBasics()
+	// NoDefault: no default to exclude, so ListNonDefault returns each element
+	enumsNoDefault, err := protoenum.NewEnums(
+		protoenum.NewEnum(protoenumresult.ResultEnum_UNKNOWN, ResultTypeUnknown),
+		protoenum.NewEnum(protoenumresult.ResultEnum_PASS, ResultTypePass),
+		protoenum.NewEnum(protoenumresult.ResultEnum_MISS, ResultTypeMiss),
+		protoenum.NewEnum(protoenumresult.ResultEnum_SKIP, ResultTypeSkip),
+	)
+	require.NoError(t, err)
+	allBasics := enumsNoDefault.ListNonDefaultBasics()
 	t.Log(allBasics)
 	require.Len(t, allBasics, 4)
 }
@@ -250,6 +266,81 @@ func TestNewEnums_DuplicateProto(t *testing.T) {
 	_, err := protoenum.NewEnums(
 		protoenum.NewEnum(protoenumstatus.StatusEnum_SUCCESS, StatusType("a")),
 		protoenum.NewEnum(protoenumstatus.StatusEnum_SUCCESS, StatusType("b")),
+	)
+	require.Error(t, err)
+	t.Log("expected:", err)
+}
+
+// TestEnums_LookupByCode checks lookup via numeric code — true on a hit, false on a miss
+//
+// 验证按数字代码查找：命中返回 true，未命中返回 false
+func TestEnums_LookupByCode(t *testing.T) {
+	type StatusType string
+	const (
+		StatusTypeUnknown StatusType = "unknown"
+		StatusTypeSuccess StatusType = "success"
+	)
+
+	enums, err := protoenum.NewEnums(
+		protoenum.NewEnum(protoenumstatus.StatusEnum_UNKNOWN, StatusTypeUnknown),
+		protoenum.NewEnum(protoenumstatus.StatusEnum_SUCCESS, StatusTypeSuccess),
+	)
+	require.NoError(t, err)
+
+	found, ok := enums.LookupByCode(int32(protoenumstatus.StatusEnum_SUCCESS.Number()))
+	require.True(t, ok)
+	t.Log(found.Basic())
+	require.Equal(t, StatusTypeSuccess, found.Basic())
+
+	_, ok = enums.LookupByCode(999)
+	require.False(t, ok)
+}
+
+// TestEnums_LookupByName checks lookup via name — true on a hit, false on a miss
+//
+// 验证按名称查找：命中返回 true，未命中返回 false
+func TestEnums_LookupByName(t *testing.T) {
+	type StatusType string
+	const (
+		StatusTypeUnknown StatusType = "unknown"
+		StatusTypeSuccess StatusType = "success"
+	)
+
+	enums, err := protoenum.NewEnums(
+		protoenum.NewEnum(protoenumstatus.StatusEnum_UNKNOWN, StatusTypeUnknown),
+		protoenum.NewEnum(protoenumstatus.StatusEnum_SUCCESS, StatusTypeSuccess),
+	)
+	require.NoError(t, err)
+
+	found, ok := enums.LookupByName(protoenumstatus.StatusEnum_SUCCESS.String())
+	require.True(t, ok)
+	t.Log(found.Basic())
+	require.Equal(t, StatusTypeSuccess, found.Basic())
+
+	_, ok = enums.LookupByName("NOT_EXISTS")
+	require.False(t, ok)
+}
+
+// TestNewEnums_DuplicateBasic checks that two distinct protos sharing one basic value cause an error
+//
+// 验证两个不同 proto 共用同一 basic 值时返回错误
+func TestNewEnums_DuplicateBasic(t *testing.T) {
+	type StatusType string
+	_, err := protoenum.NewEnums(
+		protoenum.NewEnum(protoenumstatus.StatusEnum_SUCCESS, StatusType("same")),
+		protoenum.NewEnum(protoenumstatus.StatusEnum_FAILURE, StatusType("same")),
+	)
+	require.Error(t, err)
+	t.Log("expected:", err)
+}
+
+// TestNewEnums_NilElement checks that a nil Enum element gives an error
+//
+// 验证传入 nil Enum 元素时返回错误
+func TestNewEnums_NilElement(t *testing.T) {
+	type StatusType string
+	_, err := protoenum.NewEnums[protoenumstatus.StatusEnum, StatusType, *protoenum.MetaNone](
+		nil,
 	)
 	require.Error(t, err)
 	t.Log("expected:", err)

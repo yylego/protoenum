@@ -1,15 +1,14 @@
 module github.com/yylego/protoenum
 
-go 1.23.0
+go 1.25.0
 
 require (
 	github.com/stretchr/testify v1.11.1
-	github.com/yylego/erero v0.0.0
+	github.com/yylego/erero v0.0.1
 	github.com/yylego/must v0.0.0
 	github.com/yylego/rese v0.0.0
-	github.com/yylego/tern v0.0.0
 	github.com/yylego/zaplog v0.0.0
-	go.uber.org/zap v1.27.1
+	go.uber.org/zap v1.28.0
 	google.golang.org/protobuf v1.36.11
 )
 

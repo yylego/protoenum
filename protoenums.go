@@ -11,8 +11,6 @@ import (
 	"slices"
 
 	"github.com/yylego/erero"
-	"github.com/yylego/protoenum/internal/utils"
-	"github.com/yylego/tern/slicetern"
 )
 
 // Enums manages a collection of Enum instances with indexed lookups
@@ -30,18 +28,17 @@ type Enums[P ProtoEnum, B comparable, M any] struct {
 	mapCode2Enum map[int32]*Enum[P, B, M]  // Map from numeric code to Enum // 从数字代码到 Enum 的映射
 	mapName2Enum map[string]*Enum[P, B, M] // Map from name string to Enum // 从名称字符串到 Enum 的映射
 	mapBasicEnum map[B]*Enum[P, B, M]      // Map from basic enum to Enum // 从 basic 枚举到 Enum 的映射
-	defaultValue *Enum[P, B, M]            // Configurable default value when lookup misses // 查找失败时的可选默认值
-	defaultValid *bool                     // When true, default is treated as valid in ListValidXxx // 为 true 时，ListValidXxx 将默认值视为有效
+	defaultValue *Enum[P, B, M]            // Fallback returned by GetByXxx on a miss; nil under NoDefault // GetByXxx 查不到时回落的兜底值；NoDefault 时为 nil
 }
 
 // NewEnums creates a new Enums collection from the given Enum instances
 // Builds indexed maps enabling efficient lookup using proto, code, name, and basic value
-// The first item becomes the default value if provided
-// Returns an error if duplicate proto, code, name, or basic values are detected
+// No default is set here; the default is an explicit opt-in — chain WithDefault once to fix the first element
+// Returns an error on any duplicate proto / code / name / basic value
 //
 // 从给定的 Enum 实例创建新的 Enums 集合
 // 构建索引映射以通过 proto、代码、名称和 basic 枚举值高效查找
-// 如果提供了参数，第一个项成为默认值
+// 此处不设默认值；默认值是显式可选项——如需兜底，链式调用一次 WithDefault 把首元素固定为默认
 // 如果检测到重复的 proto、代码、名称或 basic 值则返回错误
 func NewEnums[P ProtoEnum, B comparable, M any](params ...*Enum[P, B, M]) (*Enums[P, B, M], error) {
 	res := &Enums[P, B, M]{
@@ -50,8 +47,6 @@ func NewEnums[P ProtoEnum, B comparable, M any](params ...*Enum[P, B, M]) (*Enum
 		mapCode2Enum: make(map[int32]*Enum[P, B, M], len(params)),
 		mapName2Enum: make(map[string]*Enum[P, B, M], len(params)),
 		mapBasicEnum: make(map[B]*Enum[P, B, M], len(params)),
-		defaultValue: slicetern.V0(params), // Set first item as default if available // 如果有参数，将第一个设置为默认值
-		defaultValid: nil,
 	}
 	for _, enum := range params {
 		if enum == nil {
@@ -211,38 +206,38 @@ func (c *Enums[P, B, M]) ListBasics() []B {
 	return results
 }
 
-// ListValidProtos returns a slice excluding the default protoEnum value.
+// ListNonDefaultProtos returns a slice excluding the default protoEnum value.
 // If no default value is configured, returns each protoEnum value.
 //
 // 返回一个切片，排除默认 protoEnum 值，其余按定义次序排列。
 // 如果未配置默认值，则返回所有 protoEnum 值。
-func (c *Enums[P, B, M]) ListValidProtos() []P {
-	if c.defaultValue != nil && !utils.GetPointerValue(c.defaultValid) {
-		var results []P
-		for _, item := range c.enumElements {
-			if item.Code() != c.defaultValue.Code() {
-				results = append(results, item.Proto())
-			}
-		}
-		return results
+func (c *Enums[P, B, M]) ListNonDefaultProtos() []P {
+	if c.defaultValue == nil {
+		return c.ListProtos()
 	}
-	return c.ListProtos()
+	results := make([]P, 0, len(c.enumElements))
+	for _, item := range c.enumElements {
+		if item.Proto() != c.defaultValue.Proto() {
+			results = append(results, item.Proto())
+		}
+	}
+	return results
 }
 
-// ListValidBasics returns a slice excluding the default basicEnum value.
+// ListNonDefaultBasics returns a slice excluding the default basicEnum value.
 // If no default value is configured, returns each basicEnum value.
 //
 // 返回一个切片，排除默认 basicEnum 值，其余按定义次序排列。
 // 如果未配置默认值，则返回所有 basicEnum 值。
-func (c *Enums[P, B, M]) ListValidBasics() []B {
-	if c.defaultValue != nil && !utils.GetPointerValue(c.defaultValid) {
-		var results []B
-		for _, item := range c.enumElements {
-			if item.Basic() != c.defaultValue.Basic() {
-				results = append(results, item.Basic())
-			}
-		}
-		return results
+func (c *Enums[P, B, M]) ListNonDefaultBasics() []B {
+	if c.defaultValue == nil {
+		return c.ListBasics()
 	}
-	return c.ListBasics()
+	results := make([]B, 0, len(c.enumElements))
+	for _, item := range c.enumElements {
+		if item.Basic() != c.defaultValue.Basic() {
+			results = append(results, item.Basic())
+		}
+	}
+	return results
 }
