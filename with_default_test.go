@@ -18,27 +18,29 @@ func TestEnums_WithDefault(t *testing.T) {
 		StatusTypeFailure StatusType = "failure"
 	)
 
-	enums, err := protoenum.NewEnums(
+	enums := protoenum.NewEnums(
 		protoenum.NewEnum(protoenumstatus.StatusEnum_UNKNOWN, StatusTypeUnknown),
 		protoenum.NewEnum(protoenumstatus.StatusEnum_SUCCESS, StatusTypeSuccess),
 		protoenum.NewEnum(protoenumstatus.StatusEnum_FAILURE, StatusTypeFailure),
 	)
-	require.NoError(t, err)
 	enums.WithDefault()
 
-	defProto, err := enums.GetDefaultProto()
-	require.NoError(t, err)
-	require.Equal(t, protoenumstatus.StatusEnum_UNKNOWN, defProto)
+	def, ok := enums.GetDefault()
+	require.True(t, ok)
+	require.Equal(t, protoenumstatus.StatusEnum_UNKNOWN, def.Proto())
+	require.Equal(t, StatusTypeUnknown, def.Basic())
 
-	defBasic, err := enums.GetDefaultBasic()
-	require.NoError(t, err)
-	require.Equal(t, StatusTypeUnknown, defBasic)
-
-	require.Equal(t, StatusTypeUnknown, enums.GetByCode(999).Basic())                // miss falls back to default
-	require.Equal(t, StatusTypeSuccess, enums.GetByBasic(StatusTypeSuccess).Basic()) // hit returns the element
+	// miss falls back to the default
+	miss, ok := enums.GetByCodeFallbackDefault(999)
+	require.True(t, ok)
+	require.Equal(t, StatusTypeUnknown, miss.Basic())
+	// hit returns the element
+	hit, ok := enums.GetByBasicFallbackDefault(StatusTypeSuccess)
+	require.True(t, ok)
+	require.Equal(t, StatusTypeSuccess, hit.Basic())
 }
 
-// Without WithDefault, GetDefault reports an error and a miss returns nil.
+// Without WithDefault, GetDefault returns ok=false and a miss returns nil.
 func TestEnums_NoDefault(t *testing.T) {
 	type StatusType string
 	const (
@@ -46,20 +48,22 @@ func TestEnums_NoDefault(t *testing.T) {
 		StatusTypeSuccess StatusType = "success"
 	)
 
-	enums, err := protoenum.NewEnums(
+	enums := protoenum.NewEnums(
 		protoenum.NewEnum(protoenumstatus.StatusEnum_UNKNOWN, StatusTypeUnknown),
 		protoenum.NewEnum(protoenumstatus.StatusEnum_SUCCESS, StatusTypeSuccess),
 	)
-	require.NoError(t, err)
 
-	_, err = enums.GetDefault()
-	require.Error(t, err)
-	_, err = enums.GetDefaultProto()
-	require.Error(t, err)
-	_, err = enums.GetDefaultBasic()
-	require.Error(t, err)
-	require.Nil(t, enums.GetByCode(999))                                             // miss returns nil
-	require.Equal(t, StatusTypeSuccess, enums.GetByBasic(StatusTypeSuccess).Basic()) // hit returns the element
+	def, ok := enums.GetDefault()
+	require.False(t, ok)
+	require.Nil(t, def)
+	// miss + no default → (nil, false)
+	miss, ok := enums.GetByCodeFallbackDefault(999)
+	require.False(t, ok)
+	require.Nil(t, miss)
+	// hit returns the element
+	hit, ok := enums.GetByBasicFallbackDefault(StatusTypeSuccess)
+	require.True(t, ok)
+	require.Equal(t, StatusTypeSuccess, hit.Basic())
 }
 
 // The default is fixed just once; a second WithDefault panics.
@@ -70,11 +74,10 @@ func TestEnums_Default_SetOnce(t *testing.T) {
 		StatusTypeSuccess StatusType = "success"
 	)
 
-	enums, err := protoenum.NewEnums(
+	enums := protoenum.NewEnums(
 		protoenum.NewEnum(protoenumstatus.StatusEnum_UNKNOWN, StatusTypeUnknown),
 		protoenum.NewEnum(protoenumstatus.StatusEnum_SUCCESS, StatusTypeSuccess),
 	)
-	require.NoError(t, err)
 
 	enums.WithDefault()
 

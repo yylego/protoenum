@@ -3,7 +3,6 @@ package main
 import (
 	"github.com/yylego/protoenum"
 	"github.com/yylego/protoenum/protos/protoenumstatus"
-	"github.com/yylego/rese"
 	"github.com/yylego/zaplog"
 	"go.uber.org/zap"
 )
@@ -20,27 +19,27 @@ const (
 
 // Build status enum collection
 // 构建状态枚举集合
-var enums = rese.P1(protoenum.NewEnums(
+var enums = protoenum.NewEnums(
 	protoenum.NewEnum(protoenumstatus.StatusEnum_UNKNOWN, StatusTypeUnknown),
 	protoenum.NewEnum(protoenumstatus.StatusEnum_SUCCESS, StatusTypeSuccess),
 	protoenum.NewEnum(protoenumstatus.StatusEnum_FAILURE, StatusTypeFailure),
-)).WithDefault()
+).WithDefault()
 
 func main() {
-	item := enums.GetByCode(int32(protoenumstatus.StatusEnum_SUCCESS))
-	zaplog.LOG.Debug("basic", zap.String("msg", string(item.Basic())))
-
-	enum := enums.GetByName("SUCCESS")
-	base := protoenumstatus.StatusEnum(enum.Code())
-	zaplog.LOG.Debug("base", zap.String("msg", base.String()))
-
-	if base == protoenumstatus.StatusEnum_SUCCESS {
-		zaplog.LOG.Debug("done")
+	if item, ok := enums.GetByCodeFallbackDefault(int32(protoenumstatus.StatusEnum_SUCCESS)); ok {
+		zaplog.LOG.Debug("basic", zap.String("msg", string(item.Basic())))
 	}
 
-	defaultBasic, err := enums.GetDefaultBasic()
-	if err != nil {
-		panic(err)
+	if enum, ok := enums.GetByNameFallbackDefault("SUCCESS"); ok {
+		base := protoenumstatus.StatusEnum(enum.Code())
+		zaplog.LOG.Debug("base", zap.String("msg", base.String()))
+
+		if base == protoenumstatus.StatusEnum_SUCCESS {
+			zaplog.LOG.Debug("done")
+		}
 	}
-	zaplog.LOG.Debug("default", zap.String("msg", string(defaultBasic)))
+
+	if defaultEnum, ok := enums.GetDefault(); ok {
+		zaplog.LOG.Debug("default", zap.String("msg", string(defaultEnum.Basic())))
+	}
 }

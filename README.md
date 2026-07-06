@@ -25,7 +25,7 @@
 🔗 **Go Native Enum Bridge**: Seamless conversion via `Basic()` method to Go native enum types
 ⚡ **Multi-Lookup Support**: Fast code, name, and basic-value lookups
 🔄 **Type-Safe Operations**: Triple generics maintain strict type checks across protobuf, Go native enums, and metadata
-🛡️ **Strict Design**: Single usage pattern prevents misuse with required defaults
+🛡️ **Strict Design**: panics fast on a nil / duplicate; the default is an explicit set-once opt-in
 🌍 **Production Grade**: Battle-tested enum handling in enterprise applications
 
 ## Installation
@@ -67,32 +67,29 @@ const (
 
 // Build status enum collection
 // 构建状态枚举集合
-var enums = rese.P1(protoenum.NewEnums(
+var enums = protoenum.NewEnums(
 	protoenum.NewEnum(protoenumstatus.StatusEnum_UNKNOWN, StatusTypeUnknown),
 	protoenum.NewEnum(protoenumstatus.StatusEnum_SUCCESS, StatusTypeSuccess),
 	protoenum.NewEnum(protoenumstatus.StatusEnum_FAILURE, StatusTypeFailure),
-)).WithDefault()
+).WithDefault()
 
 func main() {
-	// Get Go native enum from protobuf enum (returns default when not found)
-	item := enums.GetByCode(int32(protoenumstatus.StatusEnum_SUCCESS))
-	zaplog.LOG.Debug("basic", zap.String("msg", string(item.Basic())))
-
-	// Convert between protoenum and native enum (safe with default fallback)
-	enum := enums.GetByName("SUCCESS")
-	base := protoenumstatus.StatusEnum(enum.Code())
-	zaplog.LOG.Debug("base", zap.String("msg", base.String()))
-
-	if base == protoenumstatus.StatusEnum_SUCCESS {
-		zaplog.LOG.Debug("done")
+	if item, ok := enums.GetByCodeFallbackDefault(int32(protoenumstatus.StatusEnum_SUCCESS)); ok {
+		zaplog.LOG.Debug("basic", zap.String("msg", string(item.Basic())))
 	}
 
-	// Get default basic enum value (WithDefault fixed the first element)
-	defaultBasic, err := enums.GetDefaultBasic()
-	if err != nil {
-		panic(err)
+	if enum, ok := enums.GetByNameFallbackDefault("SUCCESS"); ok {
+		base := protoenumstatus.StatusEnum(enum.Code())
+		zaplog.LOG.Debug("base", zap.String("msg", base.String()))
+
+		if base == protoenumstatus.StatusEnum_SUCCESS {
+			zaplog.LOG.Debug("done")
+		}
 	}
-	zaplog.LOG.Debug("default", zap.String("msg", string(defaultBasic)))
+
+	if defaultEnum, ok := enums.GetDefault(); ok {
+		zaplog.LOG.Debug("default", zap.String("msg", string(defaultEnum.Basic())))
+	}
 }
 ```
 
@@ -121,42 +118,33 @@ const (
 	ResultTypeSkip    ResultType = "skip"
 )
 
-// Build enum collection with description
-// 构建带描述的枚举集合
-var enums = rese.P1(protoenum.NewEnums(
+var enums = protoenum.NewEnums(
 	protoenum.NewEnumWithDesc(protoenumresult.ResultEnum_UNKNOWN, ResultTypeUnknown, "其它"),
 	protoenum.NewEnumWithDesc(protoenumresult.ResultEnum_PASS, ResultTypePass, "通过"),
 	protoenum.NewEnumWithDesc(protoenumresult.ResultEnum_MISS, ResultTypeMiss, "出错"),
 	protoenum.NewEnumWithDesc(protoenumresult.ResultEnum_SKIP, ResultTypeSkip, "跳过"),
-))
+).WithDefault()
 
 func main() {
-	// Lookup using enum code (returns default when not found)
-	// 按枚举代码查找（找不到时返回默认值）
-	skip := enums.GetByCode(int32(protoenumresult.ResultEnum_SKIP))
-	zaplog.LOG.Debug("basic", zap.String("msg", string(skip.Basic())))
-	zaplog.LOG.Debug("desc", zap.String("msg", skip.Meta().Desc()))
-
-	// Lookup using Go native enum value (type-safe)
-	// 按 Go 原生枚举值查找（类型安全查找）
-	pass := enums.GetByBasic(ResultTypePass)
-	base := protoenumresult.ResultEnum(pass.Code())
-	zaplog.LOG.Debug("base", zap.String("msg", base.String()))
-
-	// Business logic with native enum
-	// 使用原生枚举的业务逻辑
-	if base == protoenumresult.ResultEnum_PASS {
-		zaplog.LOG.Debug("pass")
+	if skip, ok := enums.GetByCodeFallbackDefault(int32(protoenumresult.ResultEnum_SKIP)); ok {
+		zaplog.LOG.Debug("basic", zap.String("msg", string(skip.Basic())))
+		zaplog.LOG.Debug("desc", zap.String("msg", skip.Meta().Desc()))
 	}
 
-	// Lookup using enum name (safe with default fallback)
-	// 按枚举名称查找（安全且有默认值回退）
-	miss := enums.GetByName("MISS")
-	zaplog.LOG.Debug("basic", zap.String("msg", string(miss.Basic())))
-	zaplog.LOG.Debug("desc", zap.String("msg", miss.Meta().Desc()))
+	if pass, ok := enums.GetByBasicFallbackDefault(ResultTypePass); ok {
+		base := protoenumresult.ResultEnum(pass.Code())
+		zaplog.LOG.Debug("base", zap.String("msg", base.String()))
 
-	// List each basic enum value in defined sequence
-	// 按定义次序列出各 basic 枚举值
+		if base == protoenumresult.ResultEnum_PASS {
+			zaplog.LOG.Debug("pass")
+		}
+	}
+
+	if miss, ok := enums.GetByNameFallbackDefault("MISS"); ok {
+		zaplog.LOG.Debug("basic", zap.String("msg", string(miss.Basic())))
+		zaplog.LOG.Debug("desc", zap.String("msg", miss.Meta().Desc()))
+	}
+
 	basics := enums.ListBasics()
 	for _, basic := range basics {
 		zaplog.LOG.Debug("list", zap.String("basic", string(basic)))
@@ -183,47 +171,47 @@ func main() {
 
 ### Collection Creation
 
-| Method               | Description                                                                                | Returns                    |
-| -------------------- | ------------------------------------------------------------------------------------------ | -------------------------- |
-| `NewEnums(items...)` | Create collection with validation (no default; chain WithDefault to fix the first element) | `(*Enums[P, B, M], error)` |
+| Method               | Description                                                                                              | Returns           |
+| -------------------- | -------------------------------------------------------------------------------------------------------- | ----------------- |
+| `NewEnums(items...)` | Create collection; panics on a nil / duplicate (no default — chain WithDefault to fix the first element) | `*Enums[P, B, M]` |
 
-### Existence Check (Lookup)
+### Existence Check (Get)
 
-| Method                       | Description                                | Returns                  |
-| ---------------------------- | ------------------------------------------ | ------------------------ |
-| `enums.LookupByProto(proto)` | Lookup via protobuf enum, check existence  | `(*Enum[P, B, M], bool)` |
-| `enums.LookupByCode(code)`   | Lookup via code, check existence           | `(*Enum[P, B, M], bool)` |
-| `enums.LookupByName(name)`   | Lookup via name, check existence           | `(*Enum[P, B, M], bool)` |
-| `enums.LookupByBasic(basic)` | Lookup via Go native enum, check existence | `(*Enum[P, B, M], bool)` |
+| Method                    | Description                             | Returns                  |
+| ------------------------- | --------------------------------------- | ------------------------ |
+| `enums.GetByProto(proto)` | Get via protobuf enum, check existence  | `(*Enum[P, B, M], bool)` |
+| `enums.GetByCode(code)`   | Get via code, check existence           | `(*Enum[P, B, M], bool)` |
+| `enums.GetByName(name)`   | Get via name, check existence           | `(*Enum[P, B, M], bool)` |
+| `enums.GetByBasic(basic)` | Get via Go native enum, check existence | `(*Enum[P, B, M], bool)` |
 
-### Safe Access (Get)
+### Fallback Access
 
-| Method                    | Description                                                              | Returns          |
-| ------------------------- | ------------------------------------------------------------------------ | ---------------- |
-| `enums.GetByProto(proto)` | Get via protobuf enum (returns default if not found, nil if no default)  | `*Enum[P, B, M]` |
-| `enums.GetByCode(code)`   | Get via code (returns default if not found, nil if no default)           | `*Enum[P, B, M]` |
-| `enums.GetByName(name)`   | Get via name (returns default if not found, nil if no default)           | `*Enum[P, B, M]` |
-| `enums.GetByBasic(basic)` | Get via Go native enum (returns default if not found, nil if no default) | `*Enum[P, B, M]` |
+| Method                                   | Description                                                                               | Returns                  |
+| ---------------------------------------- | ----------------------------------------------------------------------------------------- | ------------------------ |
+| `enums.GetByProtoFallbackDefault(proto)` | Get via protobuf enum (returns (default, true) if not found, (nil, false) if no default)  | `(*Enum[P, B, M], bool)` |
+| `enums.GetByCodeFallbackDefault(code)`   | Get via code (returns (default, true) if not found, (nil, false) if no default)           | `(*Enum[P, B, M], bool)` |
+| `enums.GetByNameFallbackDefault(name)`   | Get via name (returns (default, true) if not found, (nil, false) if no default)           | `(*Enum[P, B, M], bool)` |
+| `enums.GetByBasicFallbackDefault(basic)` | Get via Go native enum (returns (default, true) if not found, (nil, false) if no default) | `(*Enum[P, B, M], bool)` |
 
 ### Enumeration (List)
 
-| Method                         | Description                                | Returns |
-| ------------------------------ | ------------------------------------------ | ------- |
-| `enums.ListProtos()`           | Returns a slice of each protoEnum value    | `[]P`   |
-| `enums.ListBasics()`           | Returns a slice of each basicEnum value    | `[]B`   |
-| `enums.ListNonDefaultProtos()` | Returns protoEnum values excluding default | `[]P`   |
-| `enums.ListNonDefaultBasics()` | Returns basicEnum values excluding default | `[]B`   |
+| Method                         | Description                                | Returns            |
+| ------------------------------ | ------------------------------------------ | ------------------ |
+| `enums.ListProtos()`           | Returns a slice of each protoEnum value    | `[]P`              |
+| `enums.ListBasics()`           | Returns a slice of each basicEnum value    | `[]B`              |
+| `enums.ListNonDefaultProtos()` | Returns protoEnum values excluding default | `[]P`              |
+| `enums.ListNonDefaultBasics()` | Returns basicEnum values excluding default | `[]B`              |
+| `enums.ListEnums()`            | Returns a slice of each Enum instance      | `[]*Enum[P, B, M]` |
+| `enums.ListNonDefaultEnums()`  | Returns Enum instances excluding default   | `[]*Enum[P, B, M]` |
 
 ### Default Value Management
 
 The default is an explicit opt-in: `NewEnums` sets none. Chain `WithDefault` once to fix the first element; the default stays put and has no unset.
 
-| Method                    | Description                                            | Returns                   |
-| ------------------------- | ------------------------------------------------------ | ------------------------- |
-| `enums.GetDefault()`      | Get current default value (error if unset)             | `(*Enum[P, B, M], error)` |
-| `enums.GetDefaultProto()` | Get default protoEnum value                            | `(P, error)`              |
-| `enums.GetDefaultBasic()` | Get default basicEnum value                            | `(B, error)`              |
-| `enums.WithDefault()`     | Chain: fix the first element as the default, just once | `*Enums[P, B, M]`         |
+| Method                | Description                                              | Returns                  |
+| --------------------- | -------------------------------------------------------- | ------------------------ |
+| `enums.GetDefault()`  | Get the default, returns (default, true) or (nil, false) | `(*Enum[P, B, M], bool)` |
+| `enums.WithDefault()` | Chain: fix the first element as the default, just once   | `*Enums[P, B, M]`        |
 
 ## Examples
 
@@ -261,32 +249,32 @@ const (
     StatusTypeFailure StatusType = "failure"
 )
 
-statusEnums, err := protoenum.NewEnums(
+statusEnums := protoenum.NewEnums(
     protoenum.NewEnumWithDesc(protoenumstatus.StatusEnum_UNKNOWN, StatusTypeUnknown, "未知状态"),
     protoenum.NewEnumWithDesc(protoenumstatus.StatusEnum_SUCCESS, StatusTypeSuccess, "成功"),
     protoenum.NewEnumWithDesc(protoenumstatus.StatusEnum_FAILURE, StatusTypeFailure, "失败"),
 )
-// Fix the first element (UNKNOWN) as the fallback default: GetByXxx returns it on a miss, ListNonDefaultXxx skips it
+// Fix the first element (UNKNOWN) as the fallback default: GetByXxxFallbackDefault returns it on a miss, ListNonDefaultXxx skips it
 statusEnums.WithDefault()
 ```
 
 **Multiple lookup methods:**
 
 ```go
-// Using numeric code - returns default if not found, nil if no default
-enum := statusEnums.GetByCode(1)
+// Using numeric code - returns (default, true) if not found, (nil, false) if no default
+enum := statusEnums.GetByCodeFallbackDefault(1)
 fmt.Printf("Found: %s\n", enum.Meta().Desc())
 
 // Using enum name
-enum = statusEnums.GetByName("SUCCESS")
+enum = statusEnums.GetByNameFallbackDefault("SUCCESS")
 fmt.Printf("Status: %s\n", enum.Meta().Desc())
 
 // Using Go native enum value - type-safe lookup
-enum = statusEnums.GetByBasic(StatusTypeSuccess)
+enum = statusEnums.GetByBasicFallbackDefault(StatusTypeSuccess)
 fmt.Printf("Basic: %s\n", enum.Basic())
 
 // Existence check - returns (enum, bool)
-if found, ok := statusEnums.LookupByCode(1); ok {
+if found, ok := statusEnums.GetByCode(1); ok {
     fmt.Printf("Found: %s\n", found.Meta().Desc())
 }
 ```
@@ -322,44 +310,46 @@ const (
 )
 
 // Bridge protobuf enum to Go native enum
-enum := enums.GetByCode(1)
-basicValue := enum.Basic()  // Returns StatusType("success")
+if enum, ok := enums.GetByCodeFallbackDefault(1); ok {
+    basicValue := enum.Basic()  // StatusType("success")
 
-// Use in business logic with Go native enum
-switch basicValue {
-case StatusTypeSuccess:
-    fmt.Println("Operation succeeded")
-case StatusTypeUnknown:
-    fmt.Println("Unknown status")
+    // Use in business logic with Go native enum
+    switch basicValue {
+    case StatusTypeSuccess:
+        fmt.Println("Operation succeeded")
+    case StatusTypeUnknown:
+        fmt.Println("Unknown status")
+    }
 }
 
-// Lookup using Go native enum value
-found := enums.GetByBasic(StatusTypeSuccess)
-fmt.Printf("Code: %d, Name: %s\n", found.Code(), found.Name())
+// Look up using Go native enum value
+if found, ok := enums.GetByBasicFallbackDefault(StatusTypeSuccess); ok {
+    fmt.Printf("Code: %d, Name: %s\n", found.Code(), found.Name())
+}
 ```
 
 **Type conversion patterns:**
 
 ```go
 // Convert from enum instance to native protobuf enum
-// Always returns valid enum (with default fallback)
-statusEnum := enums.GetByName("SUCCESS")
-native := protoenumstatus.StatusEnum(statusEnum.Code())
-// Use native enum in protobuf operations with safe access
+if statusEnum, ok := enums.GetByNameFallbackDefault("SUCCESS"); ok {
+    native := protoenumstatus.StatusEnum(statusEnum.Code())
+    fmt.Println(native) // use native enum in protobuf operations
+}
 ```
 
 **Lookup patterns:**
 
 ```go
-// GetByXxx returns default on unknown values, nil if no default
-result := enums.GetByCode(999)  // Returns default (UNKNOWN)
-if result != nil {
+// GetByXxxFallbackDefault returns (default, true) on unknown values; (nil, false) if no default
+if result, ok := enums.GetByCodeFallbackDefault(999); ok {  // uses the default (UNKNOWN)
     fmt.Printf("Fallback: %s\n", result.Name())
 }
 
-// LookupByXxx returns (enum, bool) - use with rese to panic if not found
-found, ok := enums.LookupByCode(1)
-// Use rese.P1(enums.LookupByCode(1)) to panic if not found
+// GetByXxx returns (enum, bool)
+if found, ok := enums.GetByCode(1); ok {
+    fmt.Printf("Found: %s\n", found.Name())
+}
 ```
 
 ### Default Values and Chain Configuration
@@ -374,28 +364,28 @@ const (
 )
 
 // NewEnums sets no default; chain WithDefault once to fix the first element (UNKNOWN) as the fallback
-enums, err := protoenum.NewEnums(
+enums := protoenum.NewEnums(
     protoenum.NewEnumWithDesc(protoenumstatus.StatusEnum_UNKNOWN, StatusTypeUnknown, "未知"),
     protoenum.NewEnumWithDesc(protoenumstatus.StatusEnum_SUCCESS, StatusTypeSuccess, "成功"),
 )
-// handle err ...
 enums.WithDefault()
 
-// GetDefault returns (enum, error)
-defaultEnum, err := enums.GetDefault()
+// GetDefault returns (enum, bool)
+if defaultEnum, ok := enums.GetDefault(); ok {
+    fmt.Println(defaultEnum.Basic())
+}
 ```
 
 **Fallback path:**
 
 ```go
-// With a default set, GetByXxx returns it on a miss
-notFound := enums.GetByCode(999)  // Returns UNKNOWN (the default)
-if notFound != nil {
+// With a default set, GetByXxxFallbackDefault returns it on a miss
+if notFound, ok := enums.GetByCodeFallbackDefault(999); ok {  // uses UNKNOWN (the default)
     fmt.Printf("Fallback: %s\n", notFound.Meta().Desc())
 }
 
 // The default is fixed once and has no unset. A second WithDefault panics.
-// Without a default, GetByXxx returns nil on a miss (use LookupByXxx instead).
+// Without a default, GetByXxxFallbackDefault returns nil on a miss (use GetByXxx instead).
 ```
 
 <!-- TEMPLATE (EN) BEGIN: STANDARD PROJECT FOOTER -->

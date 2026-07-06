@@ -25,7 +25,7 @@
 🔗 **Go 原生枚举桥接**：通过 `Basic()` 方法无缝转换到 Go 原生枚举类型
 ⚡ **多方式查找**：支持代码、名称和 Basic 值快速查找
 🔄 **类型安全操作**：三泛型保持 protobuf、Go 原生枚举和元数据的类型安全
-🛡️ **严格设计**：单一使用模式防止误用，强制要求默认值
+🛡️ **严格设计**：遇 nil/重复即刻 panic；默认值显式设置、仅一次、可选
 🌍 **生产级别**：经过实战检验的企业级枚举处理方案
 
 ## 安装
@@ -67,32 +67,29 @@ const (
 
 // Build status enum collection
 // 构建状态枚举集合
-var enums = rese.P1(protoenum.NewEnums(
+var enums = protoenum.NewEnums(
 	protoenum.NewEnum(protoenumstatus.StatusEnum_UNKNOWN, StatusTypeUnknown),
 	protoenum.NewEnum(protoenumstatus.StatusEnum_SUCCESS, StatusTypeSuccess),
 	protoenum.NewEnum(protoenumstatus.StatusEnum_FAILURE, StatusTypeFailure),
-)).WithDefault()
+).WithDefault()
 
 func main() {
-	// 从 protobuf 枚举获取 Go 原生枚举（找不到时返回默认值）
-	item := enums.GetByCode(int32(protoenumstatus.StatusEnum_SUCCESS))
-	zaplog.LOG.Debug("basic", zap.String("msg", string(item.Basic())))
-
-	// 在 protoenum 和原生枚举之间转换（安全且有默认值回退）
-	enum := enums.GetByName("SUCCESS")
-	base := protoenumstatus.StatusEnum(enum.Code())
-	zaplog.LOG.Debug("base", zap.String("msg", base.String()))
-
-	if base == protoenumstatus.StatusEnum_SUCCESS {
-		zaplog.LOG.Debug("done")
+	if item, ok := enums.GetByCodeFallbackDefault(int32(protoenumstatus.StatusEnum_SUCCESS)); ok {
+		zaplog.LOG.Debug("basic", zap.String("msg", string(item.Basic())))
 	}
 
-	// 获取默认 basic 枚举值（WithDefault 固定了首元素）
-	defaultBasic, err := enums.GetDefaultBasic()
-	if err != nil {
-		panic(err)
+	if enum, ok := enums.GetByNameFallbackDefault("SUCCESS"); ok {
+		base := protoenumstatus.StatusEnum(enum.Code())
+		zaplog.LOG.Debug("base", zap.String("msg", base.String()))
+
+		if base == protoenumstatus.StatusEnum_SUCCESS {
+			zaplog.LOG.Debug("done")
+		}
 	}
-	zaplog.LOG.Debug("default", zap.String("msg", string(defaultBasic)))
+
+	if defaultEnum, ok := enums.GetDefault(); ok {
+		zaplog.LOG.Debug("default", zap.String("msg", string(defaultEnum.Basic())))
+	}
 }
 ```
 
@@ -121,42 +118,33 @@ const (
 	ResultTypeSkip    ResultType = "skip"
 )
 
-// Build enum collection with description
-// 构建带描述的枚举集合
-var enums = rese.P1(protoenum.NewEnums(
+var enums = protoenum.NewEnums(
 	protoenum.NewEnumWithDesc(protoenumresult.ResultEnum_UNKNOWN, ResultTypeUnknown, "其它"),
 	protoenum.NewEnumWithDesc(protoenumresult.ResultEnum_PASS, ResultTypePass, "通过"),
 	protoenum.NewEnumWithDesc(protoenumresult.ResultEnum_MISS, ResultTypeMiss, "出错"),
 	protoenum.NewEnumWithDesc(protoenumresult.ResultEnum_SKIP, ResultTypeSkip, "跳过"),
-))
+).WithDefault()
 
 func main() {
-	// Lookup using enum code (returns default when not found)
-	// 按枚举代码查找（找不到时返回默认值）
-	skip := enums.GetByCode(int32(protoenumresult.ResultEnum_SKIP))
-	zaplog.LOG.Debug("basic", zap.String("msg", string(skip.Basic())))
-	zaplog.LOG.Debug("desc", zap.String("msg", skip.Meta().Desc()))
-
-	// Lookup using Go native enum value (type-safe)
-	// 按 Go 原生枚举值查找（类型安全查找）
-	pass := enums.GetByBasic(ResultTypePass)
-	base := protoenumresult.ResultEnum(pass.Code())
-	zaplog.LOG.Debug("base", zap.String("msg", base.String()))
-
-	// Business logic with native enum
-	// 使用原生枚举的业务逻辑
-	if base == protoenumresult.ResultEnum_PASS {
-		zaplog.LOG.Debug("pass")
+	if skip, ok := enums.GetByCodeFallbackDefault(int32(protoenumresult.ResultEnum_SKIP)); ok {
+		zaplog.LOG.Debug("basic", zap.String("msg", string(skip.Basic())))
+		zaplog.LOG.Debug("desc", zap.String("msg", skip.Meta().Desc()))
 	}
 
-	// Lookup using enum name (safe with default fallback)
-	// 按枚举名称查找（安全且有默认值回退）
-	miss := enums.GetByName("MISS")
-	zaplog.LOG.Debug("basic", zap.String("msg", string(miss.Basic())))
-	zaplog.LOG.Debug("desc", zap.String("msg", miss.Meta().Desc()))
+	if pass, ok := enums.GetByBasicFallbackDefault(ResultTypePass); ok {
+		base := protoenumresult.ResultEnum(pass.Code())
+		zaplog.LOG.Debug("base", zap.String("msg", base.String()))
 
-	// List each basic enum value in defined sequence
-	// 按定义次序列出各 basic 枚举值
+		if base == protoenumresult.ResultEnum_PASS {
+			zaplog.LOG.Debug("pass")
+		}
+	}
+
+	if miss, ok := enums.GetByNameFallbackDefault("MISS"); ok {
+		zaplog.LOG.Debug("basic", zap.String("msg", string(miss.Basic())))
+		zaplog.LOG.Debug("desc", zap.String("msg", miss.Meta().Desc()))
+	}
+
 	basics := enums.ListBasics()
 	for _, basic := range basics {
 		zaplog.LOG.Debug("list", zap.String("basic", string(basic)))
@@ -183,47 +171,47 @@ func main() {
 
 ### 创建集合
 
-| 方法                 | 说明                                                    | 返回值                     |
-| -------------------- | ------------------------------------------------------- | -------------------------- |
-| `NewEnums(items...)` | 创建集合并验证（不设默认值；链 WithDefault 固定首元素） | `(*Enums[P, B, M], error)` |
+| 方法                 | 说明                                                                 | 返回值            |
+| -------------------- | -------------------------------------------------------------------- | ----------------- |
+| `NewEnums(items...)` | 创建集合，遇 nil/重复 panic（不设默认值；链 WithDefault 固定首元素） | `*Enums[P, B, M]` |
 
-### 存在性检查 (Lookup)
+### 存在性检查 (Get)
 
-| 方法                         | 说明                               | 返回值                   |
-| ---------------------------- | ---------------------------------- | ------------------------ |
-| `enums.LookupByProto(proto)` | 按 protobuf 枚举查找，检查是否存在 | `(*Enum[P, B, M], bool)` |
-| `enums.LookupByCode(code)`   | 按代码查找，检查是否存在           | `(*Enum[P, B, M], bool)` |
-| `enums.LookupByName(name)`   | 按名称查找，检查是否存在           | `(*Enum[P, B, M], bool)` |
-| `enums.LookupByBasic(basic)` | 按 Go 原生枚举查找，检查是否存在   | `(*Enum[P, B, M], bool)` |
+| 方法                      | 说明                               | 返回值                   |
+| ------------------------- | ---------------------------------- | ------------------------ |
+| `enums.GetByProto(proto)` | 按 protobuf 枚举查找，检查是否存在 | `(*Enum[P, B, M], bool)` |
+| `enums.GetByCode(code)`   | 按代码查找，检查是否存在           | `(*Enum[P, B, M], bool)` |
+| `enums.GetByName(name)`   | 按名称查找，检查是否存在           | `(*Enum[P, B, M], bool)` |
+| `enums.GetByBasic(basic)` | 按 Go 原生枚举查找，检查是否存在   | `(*Enum[P, B, M], bool)` |
 
-### 安全访问 (Get)
+### 回落访问
 
-| 方法                      | 说明                                                       | 返回值           |
-| ------------------------- | ---------------------------------------------------------- | ---------------- |
-| `enums.GetByProto(proto)` | 按 protobuf 枚举获取（找不到返回默认值，无默认值返回 nil） | `*Enum[P, B, M]` |
-| `enums.GetByCode(code)`   | 按代码获取（找不到返回默认值，无默认值返回 nil）           | `*Enum[P, B, M]` |
-| `enums.GetByName(name)`   | 按名称获取（找不到返回默认值，无默认值返回 nil）           | `*Enum[P, B, M]` |
-| `enums.GetByBasic(basic)` | 按 Go 原生枚举获取（找不到返回默认值，无默认值返回 nil）   | `*Enum[P, B, M]` |
+| 方法                                     | 说明                                                                         | 返回值                   |
+| ---------------------------------------- | ---------------------------------------------------------------------------- | ------------------------ |
+| `enums.GetByProtoFallbackDefault(proto)` | 按 protobuf 枚举获取（找不到返回 (默认值, true)，无默认值返回 (nil, false)） | `(*Enum[P, B, M], bool)` |
+| `enums.GetByCodeFallbackDefault(code)`   | 按代码获取（找不到返回 (默认值, true)，无默认值返回 (nil, false)）           | `(*Enum[P, B, M], bool)` |
+| `enums.GetByNameFallbackDefault(name)`   | 按名称获取（找不到返回 (默认值, true)，无默认值返回 (nil, false)）           | `(*Enum[P, B, M], bool)` |
+| `enums.GetByBasicFallbackDefault(basic)` | 按 Go 原生枚举获取（找不到返回 (默认值, true)，无默认值返回 (nil, false)）   | `(*Enum[P, B, M], bool)` |
 
 ### 枚举列表 (List)
 
-| 方法                           | 说明                            | 返回值 |
-| ------------------------------ | ------------------------------- | ------ |
-| `enums.ListProtos()`           | 返回各 protoEnum 值的切片       | `[]P`  |
-| `enums.ListBasics()`           | 返回各 basicEnum 值的切片       | `[]B`  |
-| `enums.ListNonDefaultProtos()` | 返回排除默认值的 protoEnum 切片 | `[]P`  |
-| `enums.ListNonDefaultBasics()` | 返回排除默认值的 basicEnum 切片 | `[]B`  |
+| 方法                           | 说明                            | 返回值             |
+| ------------------------------ | ------------------------------- | ------------------ |
+| `enums.ListProtos()`           | 返回各 protoEnum 值的切片       | `[]P`              |
+| `enums.ListBasics()`           | 返回各 basicEnum 值的切片       | `[]B`              |
+| `enums.ListNonDefaultProtos()` | 返回排除默认值的 protoEnum 切片 | `[]P`              |
+| `enums.ListNonDefaultBasics()` | 返回排除默认值的 basicEnum 切片 | `[]B`              |
+| `enums.ListEnums()`            | 返回各 Enum 实例的切片          | `[]*Enum[P, B, M]` |
+| `enums.ListNonDefaultEnums()`  | 返回排除默认值的 Enum 实例      | `[]*Enum[P, B, M]` |
 
 ### 默认值管理
 
 默认值是显式可选项：`NewEnums` 不设默认值。链一个 `WithDefault` 一次性把首元素固定为默认——默认值永不改变、也没有取消。
 
-| 方法                      | 说明                               | 返回值                    |
-| ------------------------- | ---------------------------------- | ------------------------- |
-| `enums.GetDefault()`      | 获取当前默认值（未设置返回 error） | `(*Enum[P, B, M], error)` |
-| `enums.GetDefaultProto()` | 获取默认 protoEnum 值              | `(P, error)`              |
-| `enums.GetDefaultBasic()` | 获取默认 basicEnum 值              | `(B, error)`              |
-| `enums.WithDefault()`     | 链式：把首元素固定为默认值，仅一次 | `*Enums[P, B, M]`         |
+| 方法                  | 说明                                            | 返回值                   |
+| --------------------- | ----------------------------------------------- | ------------------------ |
+| `enums.GetDefault()`  | 获取默认值，返回 (默认值, true) 或 (nil, false) | `(*Enum[P, B, M], bool)` |
+| `enums.WithDefault()` | 链式：把首元素固定为默认值，仅一次              | `*Enums[P, B, M]`        |
 
 ## 使用示例
 
@@ -261,32 +249,32 @@ const (
     StatusTypeFailure StatusType = "failure"
 )
 
-statusEnums, err := protoenum.NewEnums(
+statusEnums := protoenum.NewEnums(
     protoenum.NewEnumWithDesc(protoenumstatus.StatusEnum_UNKNOWN, StatusTypeUnknown, "未知状态"),
     protoenum.NewEnumWithDesc(protoenumstatus.StatusEnum_SUCCESS, StatusTypeSuccess, "成功"),
     protoenum.NewEnumWithDesc(protoenumstatus.StatusEnum_FAILURE, StatusTypeFailure, "失败"),
 )
-// 把首元素(UNKNOWN)固定为兜底默认值：GetByXxx 查不到时返回它，ListNonDefaultXxx 会排除它
+// 把首元素(UNKNOWN)固定为兜底默认值：GetByXxxFallbackDefault 查不到时返回它，ListNonDefaultXxx 会排除它
 statusEnums.WithDefault()
 ```
 
 **多种查找方式：**
 
 ```go
-// 按数字代码查找（找不到返回默认值，无默认值返回 nil）
-enum := statusEnums.GetByCode(1)
+// 按数字代码查找（找不到返回 (默认值, true)，无默认值返回 (nil, false)）
+enum := statusEnums.GetByCodeFallbackDefault(1)
 fmt.Printf("找到: %s\n", enum.Meta().Desc())
 
 // 按枚举名称查找
-enum = statusEnums.GetByName("SUCCESS")
+enum = statusEnums.GetByNameFallbackDefault("SUCCESS")
 fmt.Printf("状态: %s\n", enum.Meta().Desc())
 
 // 按 Go 原生枚举值查找 - 类型安全查找
-enum = statusEnums.GetByBasic(StatusTypeSuccess)
+enum = statusEnums.GetByBasicFallbackDefault(StatusTypeSuccess)
 fmt.Printf("Basic: %s\n", enum.Basic())
 
 // 存在性检查 - 返回 (enum, bool)
-if found, ok := statusEnums.LookupByCode(1); ok {
+if found, ok := statusEnums.GetByCode(1); ok {
     fmt.Printf("找到: %s\n", found.Meta().Desc())
 }
 ```
@@ -322,44 +310,46 @@ const (
 )
 
 // 桥接 protobuf 枚举到 Go 原生枚举
-enum := enums.GetByCode(1)
-basicValue := enum.Basic()  // 返回 StatusType("success")
+if enum, ok := enums.GetByCodeFallbackDefault(1); ok {
+    basicValue := enum.Basic()  // StatusType("success")
 
-// 在业务逻辑中使用 Go 原生枚举
-switch basicValue {
-case StatusTypeSuccess:
-    fmt.Println("操作成功")
-case StatusTypeUnknown:
-    fmt.Println("未知状态")
+    // 在业务逻辑中使用 Go 原生枚举
+    switch basicValue {
+    case StatusTypeSuccess:
+        fmt.Println("操作成功")
+    case StatusTypeUnknown:
+        fmt.Println("未知状态")
+    }
 }
 
 // 通过 Go 原生枚举值查找
-found := enums.GetByBasic(StatusTypeSuccess)
-fmt.Printf("代码: %d, 名称: %s\n", found.Code(), found.Name())
+if found, ok := enums.GetByBasicFallbackDefault(StatusTypeSuccess); ok {
+    fmt.Printf("代码: %d, 名称: %s\n", found.Code(), found.Name())
+}
 ```
 
 **类型转换模式：**
 
 ```go
 // 从枚举包装器转换为原生 protobuf 枚举
-// 始终返回有效枚举（带默认值回退）
-statusEnum := enums.GetByName("SUCCESS")
-native := protoenumstatus.StatusEnum(statusEnum.Code())
-// 在 protobuf 操作中安全使用原生枚举
+if statusEnum, ok := enums.GetByNameFallbackDefault("SUCCESS"); ok {
+    native := protoenumstatus.StatusEnum(statusEnum.Code())
+    fmt.Println(native) // 在 protobuf 操作中使用原生枚举
+}
 ```
 
 **查找模式：**
 
 ```go
-// GetByXxx 对未知值返回默认值，无默认值返回 nil
-result := enums.GetByCode(999)  // 返回默认值（UNKNOWN）
-if result != nil {
+// GetByXxxFallbackDefault 对未知值返回 (默认值, true)，无默认值返回 (nil, false)
+if result, ok := enums.GetByCodeFallbackDefault(999); ok {  // 用默认值（UNKNOWN）
     fmt.Printf("回退: %s\n", result.Name())
 }
 
-// LookupByXxx 返回 (enum, bool)，配合 rese 使用可在找不到时 panic
-found, ok := enums.LookupByCode(1)
-// 或使用 rese.P1(enums.LookupByCode(1)) 在找不到时 panic
+// GetByXxx 返回 (enum, bool)
+if found, ok := enums.GetByCode(1); ok {
+    fmt.Printf("找到: %s\n", found.Name())
+}
 ```
 
 ### 默认值和链式配置
@@ -368,28 +358,28 @@ found, ok := enums.LookupByCode(1)
 
 ```go
 // NewEnums 不设默认值；链一次 WithDefault 把首元素(UNKNOWN)固定为兜底
-enums, err := protoenum.NewEnums(
+enums := protoenum.NewEnums(
     protoenum.NewEnumWithDesc(protoenumstatus.StatusEnum_UNKNOWN, StatusTypeUnknown, "未知"),
     protoenum.NewEnumWithDesc(protoenumstatus.StatusEnum_SUCCESS, StatusTypeSuccess, "成功"),
 )
-// 处理 err ...
 enums.WithDefault()
 
-// GetDefault 返回 (enum, error)
-defaultEnum, err := enums.GetDefault()
+// GetDefault 返回 (enum, bool)
+if defaultEnum, ok := enums.GetDefault(); ok {
+    fmt.Println(defaultEnum.Basic())
+}
 ```
 
 **兜底行为：**
 
 ```go
-// 设了默认值后，GetByXxx 查不到时返回它
-notFound := enums.GetByCode(999)  // 返回 UNKNOWN（默认值）
-if notFound != nil {
+// 设了默认值后，GetByXxxFallbackDefault 查不到时返回它
+if notFound, ok := enums.GetByCodeFallbackDefault(999); ok {  // 用 UNKNOWN（默认值）
     fmt.Printf("回退值: %s\n", notFound.Meta().Desc())
 }
 
 // 默认值设一次、无取消；再调 WithDefault 会 panic。
-// 不设默认值时，GetByXxx 查不到返回 nil（请改用 LookupByXxx）。
+// 不设默认值时，GetByXxxFallbackDefault 查不到返回 nil（请改用 GetByXxx）。
 ```
 
 <!-- TEMPLATE (ZH) BEGIN: STANDARD PROJECT FOOTER -->

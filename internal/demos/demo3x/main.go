@@ -3,7 +3,6 @@ package main
 import (
 	"github.com/yylego/protoenum"
 	"github.com/yylego/protoenum/protos/protoenumstatus"
-	"github.com/yylego/rese"
 	"github.com/yylego/zaplog"
 	"go.uber.org/zap"
 )
@@ -30,25 +29,27 @@ func (c *MetaI18n) English() string { return c.enUS }
 
 // Build enum collection with custom English/Chinese metadata
 // 构建带有自定义中英文元数据的枚举集合
-var enums = rese.P1(protoenum.NewEnums(
+var enums = protoenum.NewEnums(
 	protoenum.NewEnumWithMeta(protoenumstatus.StatusEnum_UNKNOWN, StatusTypeUnknown, &MetaI18n{zhCN: "未知", enUS: "Unknown"}),
 	protoenum.NewEnumWithMeta(protoenumstatus.StatusEnum_SUCCESS, StatusTypeSuccess, &MetaI18n{zhCN: "成功", enUS: "Success"}),
 	protoenum.NewEnumWithMeta(protoenumstatus.StatusEnum_FAILURE, StatusTypeFailure, &MetaI18n{zhCN: "失败", enUS: "Failure"}),
-)).WithDefault()
+).WithDefault()
 
 func main() {
-	success := enums.GetByBasic(StatusTypeSuccess)
-	zaplog.LOG.Debug("basic", zap.String("msg", string(success.Basic())))
-	zaplog.LOG.Debug("zh-CN", zap.String("msg", success.Meta().Chinese()))
-	zaplog.LOG.Debug("en-US", zap.String("msg", success.Meta().English()))
+	if success, ok := enums.GetByBasicFallbackDefault(StatusTypeSuccess); ok {
+		zaplog.LOG.Debug("basic", zap.String("msg", string(success.Basic())))
+		zaplog.LOG.Debug("zh-CN", zap.String("msg", success.Meta().Chinese()))
+		zaplog.LOG.Debug("en-US", zap.String("msg", success.Meta().English()))
 
-	failure := enums.GetByCode(int32(protoenumstatus.StatusEnum_FAILURE))
-	zaplog.LOG.Debug("basic", zap.String("msg", string(failure.Basic())))
-	zaplog.LOG.Debug("zh-CN", zap.String("msg", failure.Meta().Chinese()))
-	zaplog.LOG.Debug("en-US", zap.String("msg", failure.Meta().English()))
+		if success.Basic() == StatusTypeSuccess {
+			zaplog.LOG.Debug("done")
+		}
+	}
 
-	if success.Basic() == StatusTypeSuccess {
-		zaplog.LOG.Debug("done")
+	if failure, ok := enums.GetByCodeFallbackDefault(int32(protoenumstatus.StatusEnum_FAILURE)); ok {
+		zaplog.LOG.Debug("basic", zap.String("msg", string(failure.Basic())))
+		zaplog.LOG.Debug("zh-CN", zap.String("msg", failure.Meta().Chinese()))
+		zaplog.LOG.Debug("en-US", zap.String("msg", failure.Meta().English()))
 	}
 
 	validBasics := enums.ListNonDefaultBasics()

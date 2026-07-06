@@ -1,55 +1,41 @@
-// Package protoenum: Utilities to handle Protocol Buffer enum metadata management
-// Provides type-safe enum descriptors with Go native enum binding and custom metadata
-// Supports triple generic wrapping: protoEnum, basic, and metaType
-// Enables seamless conversion between protobuf enums and Go native enum types
+// Package protoenum: manages Protocol Buffer enum metadata
+// Wraps a protobuf enum with a Go native enum and custom metadata
+// Uses three generics: protoEnum, basic, and metaType
 //
-// protoenum: Protocol Buffer 枚举元数据管理包装工具
-// 提供带有 Go 原生枚举绑定和自定义元数据的类型安全枚举描述符
-// 支持三泛型包装：protoEnum、basic 和 metaType
-// 实现 protobuf 枚举与 Go 原生枚举类型之间的无缝转换
+// protoenum: Protocol Buffer 枚举元数据管理
+// 用 Go 原生枚举和自定义元数据包装 protobuf 枚举
+// 使用三个泛型：protoEnum、basic、metaType
 package protoenum
 
 import (
 	"google.golang.org/protobuf/reflect/protoreflect"
 )
 
-// ProtoEnum establishes the core contract enabling Protocol Buffer enum integration
-// Serves as the generic constraint enabling type-safe enum operations across each protobuf enum
-// Bridges the native protobuf enum system with enhanced metadata management capabilities
-// Important when maintaining compile-time type checking while adding runtime descriptive features
+// ProtoEnum constrains a generic type param to a protobuf enum
+// A protobuf enum has String() + Number() and is comparable, so it works as a map index
 //
-// ProtoEnum 建立 Protocol Buffer 枚举集成的基础契约
-// 作为泛型约束实现跨所有 protobuf 枚举的类型安全包装操作
-// 在原生 protobuf 枚举系统与增强元数据管理能力之间建立桥梁
-// 在添加运行时描述特性的同时保持编译时类型安全至关重要
+// ProtoEnum 约束泛型参数为 protobuf 枚举
+// protobuf 枚举有 String() + Number() 且可比较，因此能当 map 键
 type ProtoEnum interface {
-	// String provides the standard name of the enum value as defined in protobuf schema
-	// Important when performing serialization, debugging, and human-readable enum identification
-	// String 提供 protobuf 模式中定义的枚举值规范名称标识符
-	// 在进行序列化、调试和人类可读的枚举识别时至关重要
+	// String gives the enum name from the protobuf schema
+	// String 返回 protobuf 模式里的枚举名称
 	String() string
-	// Number exposes the underlying numeric wire-format encoding used in protobuf serialization
-	// Enables efficient storage, transmission, and support with protobuf specifications
-	// Number 暴露 protobuf 序列化中使用的底层数值线格式编码
-	// 实现高效存储、传输以及与 protobuf 规范的兼容性
+	// Number gives the numeric wire value
+	// Number 返回数字线格式值
 	Number() protoreflect.EnumNumber
 
-	// comparable constraint matches protobuf enum patterns and enables map-index usage
-	// protobuf enums can be compared, this constraint maintains type-safe operations
-	// comparable 约束与 protobuf 枚举行为一致，并支持作为 map 键使用
-	// Protocol Buffer 枚举本身可比较，此约束确保类型安全
+	// comparable lets the enum act as a map index
+	// comparable 让枚举能当 map 键
 	comparable
 }
 
-// Enum wraps a Protocol Buffer enum with Go native enum and custom metadata
-// Bridges protobuf enum (protoEnum) with Go native enum (basic) via Basic() method
-// Associates custom metadata with the enum value via Meta() method
-// Uses triple generics to maintain type checking across protobuf, Go native enum, and metadata
+// Enum wraps a protobuf enum with a Go native enum and custom metadata
+// Basic() gives the Go native enum; Meta() gives the metadata
+// Uses three generics to keep type checks across the three parts
 //
-// Enum 使用 Go 原生枚举和自定义元数据包装 Protocol Buffer 枚举
-// 通过 Basic() 方法桥接 protobuf 枚举 (protoEnum) 和 Go 原生枚举 (basic)
-// 通过 Meta() 方法关联枚举值与自定义元数据
-// 使用三泛型在 protobuf、Go 原生枚举和元数据类型间保持类型安全
+// Enum 用 Go 原生枚举和自定义元数据包装 protobuf 枚举
+// Basic() 取 Go 原生枚举值，Meta() 取元数据
+// 使用三个泛型在三部分之间保持类型检查
 type Enum[protoEnum ProtoEnum, basicEnum comparable, metaType any] struct {
 	proto protoEnum // Source Protocol Buffer enum value // 源 Protocol Buffer 枚举值
 	basic basicEnum // Go native enum value (e.g. type StatusType string) // Go 原生枚举值（如 type StatusType string）
@@ -108,23 +94,17 @@ func NewEnumWithMeta[protoEnum ProtoEnum, basicEnum comparable, metaType any](pr
 }
 
 // Proto returns the underlying Protocol Buffer enum value
-// Provides access to the source enum enabling Protocol Buffer operations
 //
 // 返回底层的 Protocol Buffer 枚举值
-// 提供对源枚举的访问以进行 Protocol Buffer 操作
 func (c *Enum[protoEnum, basicEnum, metaType]) Proto() protoEnum {
 	return c.proto
 }
 
-// Basic returns the Go native enum value associated with this enum
-// Enables type-safe conversion from protobuf enum to Go native enum (e.g. type StatusType string)
-// Use this to get the basic enum value when working with Go native enum patterns
-// Bridges protobuf enums with existing Go enum-based business logic with ease
+// Basic returns the Go native enum value bound to this enum
+// Use it to move from a protobuf enum to a Go native enum (e.g. type StatusType string)
 //
-// 返回与此枚举关联的 Go 原生枚举值
-// 实现从 protobuf 枚举到 Go 原生枚举的类型安全转换（如 type StatusType string）
-// 在使用 Go 原生枚举模式时使用此方法获取 basic 枚举值
-// 无缝桥接 protobuf 枚举与现有基于 Go 枚举的业务逻辑
+// 返回与此枚举绑定的 Go 原生枚举值
+// 用它从 protobuf 枚举转到 Go 原生枚举（如 type StatusType string）
 func (c *Enum[protoEnum, basicEnum, metaType]) Basic() basicEnum {
 	return c.basic
 }
@@ -132,7 +112,7 @@ func (c *Enum[protoEnum, basicEnum, metaType]) Basic() basicEnum {
 // Code returns the numeric code of the enum as int32
 // Converts the Protocol Buffer enum value to a standard int32 type
 //
-// 返回枚举的数字代码作 int32
+// 返回枚举的数字代码为 int32
 // 将 Protocol Buffer 枚举数字转换成标准 int32 类型
 func (c *Enum[protoEnum, basicEnum, metaType]) Code() int32 {
 	return int32(c.proto.Number())
