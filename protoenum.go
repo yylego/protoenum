@@ -12,10 +12,12 @@ import (
 )
 
 // ProtoEnum constrains a generic type param to a protobuf enum
-// A protobuf enum has String() + Number() and is comparable, so it works as a map index
+// A protobuf enum has String() + Number() + Descriptor() and is comparable, so it works as a map index
+// The enums that protoc-gen-go generates meet this constraint
 //
 // ProtoEnum 约束泛型参数为 protobuf 枚举
-// protobuf 枚举有 String() + Number() 且可比较，因此能当 map 键
+// protobuf 枚举有 String() + Number() + Descriptor() 且可比较，因此能当 map 键
+// protoc-gen-go 生成的枚举都满足这个约束
 type ProtoEnum interface {
 	// String gives the enum name from the protobuf schema
 	// String 返回 protobuf 模式里的枚举名称
@@ -23,6 +25,9 @@ type ProtoEnum interface {
 	// Number gives the numeric wire value
 	// Number 返回数字线格式值
 	Number() protoreflect.EnumNumber
+	// Descriptor gives the enum declaration, which lists each value the proto declares
+	// Descriptor 返回枚举的声明，其中列出 proto 声明的每个值
+	Descriptor() protoreflect.EnumDescriptor
 
 	// comparable lets the enum act as a map index
 	// comparable 让枚举能当 map 键
@@ -45,12 +50,10 @@ type Enum[protoEnum ProtoEnum, basicEnum comparable, metaType any] struct {
 // NewEnum creates a new Enum instance binding protobuf enum with Go native enum
 // Use this when you just need enum mapping without description
 // The basic param accepts Go native enum type (e.g. type StatusType string)
-// Returns a reference to the created Enum instance, supporting chained invocation
 //
 // 创建新的 Enum 实例，绑定 protobuf 枚举与 Go 原生枚举
 // 当只需要枚举映射而不需要描述时使用此函数
 // basic 参数接受 Go 原生枚举类型（如 type StatusType string）
-// 返回创建的 Enum 实例指针以便链式调用
 func NewEnum[protoEnum ProtoEnum, basicEnum comparable](proto protoEnum, basic basicEnum) *Enum[protoEnum, basicEnum, *MetaNone] {
 	return &Enum[protoEnum, basicEnum, *MetaNone]{
 		proto: proto,

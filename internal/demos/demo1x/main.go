@@ -39,7 +39,7 @@ func main() {
 		}
 	}
 
-	if defaultEnum, ok := enums.GetDefault(); ok {
+	if defaultEnum, ok := enums.Default(); ok {
 		zaplog.LOG.Debug("default", zap.String("msg", string(defaultEnum.Basic())))
 	}
 }

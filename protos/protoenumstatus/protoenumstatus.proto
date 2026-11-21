@@ -9,7 +9,7 @@ option java_package = "protoenumstatus";
 // StatusEnum defines operation status values
 // StatusEnum 定义操作状态
 enum StatusEnum {
-	UNKNOWN = 0;
-	SUCCESS = 1;
-	FAILURE = 2;
+  UNKNOWN = 0;
+  SUCCESS = 1;
+  FAILURE = 2;
 }

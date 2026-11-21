@@ -9,7 +9,7 @@ import (
 )
 
 // WithDefault fixes the first element (UNKNOWN) as the default;
-// GetDefault* then return it and a miss falls back to it.
+// Default then returns it and a miss falls back to it.
 func TestEnums_WithDefault(t *testing.T) {
 	type StatusType string
 	const (
@@ -25,7 +25,7 @@ func TestEnums_WithDefault(t *testing.T) {
 	)
 	enums.WithDefault()
 
-	def, ok := enums.GetDefault()
+	def, ok := enums.Default()
 	require.True(t, ok)
 	require.Equal(t, protoenumstatus.StatusEnum_UNKNOWN, def.Proto())
 	require.Equal(t, StatusTypeUnknown, def.Basic())
@@ -40,7 +40,7 @@ func TestEnums_WithDefault(t *testing.T) {
 	require.Equal(t, StatusTypeSuccess, hit.Basic())
 }
 
-// Without WithDefault, GetDefault returns ok=false and a miss returns nil.
+// Without WithDefault, Default returns ok=false and a miss returns nil.
 func TestEnums_NoDefault(t *testing.T) {
 	type StatusType string
 	const (
@@ -53,7 +53,7 @@ func TestEnums_NoDefault(t *testing.T) {
 		protoenum.NewEnum(protoenumstatus.StatusEnum_SUCCESS, StatusTypeSuccess),
 	)
 
-	def, ok := enums.GetDefault()
+	def, ok := enums.Default()
 	require.False(t, ok)
 	require.Nil(t, def)
 	// miss + no default → (nil, false)

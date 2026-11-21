@@ -9,8 +9,8 @@ option java_package = "protoenumresult";
 // ResultEnum defines operation result states
 // ResultEnum 定义操作结果状态
 enum ResultEnum {
-	UNKNOWN = 0;
-	PASS = 1;
-	MISS = 2;
-	SKIP = 3;
+  UNKNOWN = 0;
+  PASS = 1;
+  MISS = 2;
+  SKIP = 3;
 }

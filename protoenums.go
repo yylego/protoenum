@@ -1,10 +1,3 @@
-// Package protoenum: Collection management to handle Protocol Buffer enum metadata
-// Provides indexed collections of enum descriptors with multiple lookup methods
-// Looks up via proto, code, name, and basic value
-//
-// protoenum: Protocol Buffer 枚举元数据集合管理
-// 提供带有多种查找方法的枚举描述符索引集合
-// 支持按代码、名称或 basic 枚举值快速检索，实现高效枚举处理
 package protoenum
 
 import (
@@ -14,21 +7,19 @@ import (
 )
 
 // Enums manages a collection of Enum instances with indexed lookups
-// Keeps a map for proto, code, name, and basic so lookup stays O(1)
-// Provides O(1) lookup when searching proto, code, name, and basic value
-// Includes a configurable default value returned when lookups miss
+// Keeps a map for proto, code, name, and basic, so each lookup is O(1)
+// Includes an opt-in default value returned when lookups miss
 //
 // Enums 管理 Enum 实例集合并提供索引查找
-// 维护四个映射表以通过不同标识符高效检索
-// 为 proto、代码、名称和 basic 枚举值搜索提供 O(1) 查找性能
-// 支持在查找失败时返回可选的默认值
+// 为 proto、代码、名称和 basic 各维护一个映射表，每次查找都是 O(1)
+// 带一个可选的默认值，查找落空时返回
 type Enums[P ProtoEnum, B comparable, M any] struct {
 	enumElements []*Enum[P, B, M]          // Holds complete Enum instances in defined sequence // 存放所有 Enum 实例，并维持其定义的次序
 	mapProtoEnum map[P]*Enum[P, B, M]      // Map from proto enum to Enum // 从 proto 枚举到 Enum 的映射
 	mapCode2Enum map[int32]*Enum[P, B, M]  // Map from numeric code to Enum // 从数字代码到 Enum 的映射
 	mapName2Enum map[string]*Enum[P, B, M] // Map from name string to Enum // 从名称字符串到 Enum 的映射
 	mapBasicEnum map[B]*Enum[P, B, M]      // Map from basic enum to Enum // 从 basic 枚举到 Enum 的映射
-	defaultValue *Enum[P, B, M]            // Fallback returned by GetByXxxFallbackDefault on a miss; nil under NoDefault // GetByXxxFallbackDefault 查不到时回落的兜底值；NoDefault 时为 nil
+	defaultValue *Enum[P, B, M]            // Fallback that GetByXxxFallbackDefault returns on a miss; not set before WithDefault // GetByXxxFallbackDefault 查不到时回落的兜底值；调用 WithDefault 之前为 nil
 }
 
 // NewEnums creates a new Enums collection from the given Enum instances
@@ -160,12 +151,12 @@ func (c *Enums[P, B, M]) GetByBasicFallbackDefault(basic B) (*Enum[P, B, M], boo
 	return c.defaultValue, c.defaultValue != nil
 }
 
-// GetDefault returns the default Enum
+// Default returns the default Enum
 // Returns (default, true) when fixed; (nil, false) when no default has been fixed
 //
-// 返回默认 Enum
+// Default 返回默认 Enum
 // 已固定时返回 (默认值, true)，未固定时返回 (nil, false)
-func (c *Enums[P, B, M]) GetDefault() (*Enum[P, B, M], bool) {
+func (c *Enums[P, B, M]) Default() (*Enum[P, B, M], bool) {
 	return c.defaultValue, c.defaultValue != nil
 }
 

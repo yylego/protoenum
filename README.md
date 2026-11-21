@@ -1,9 +1,13 @@
+<!-- TEMPLATE (EN) BEGIN: BADGES -->
+
 [![GitHub Workflow Status (branch)](https://img.shields.io/github/actions/workflow/status/yylego/protoenum/release.yml?branch=main&label=BUILD)](https://github.com/yylego/protoenum/actions/workflows/release.yml?query=branch%3Amain)
 [![GoDoc](https://pkg.go.dev/badge/github.com/yylego/protoenum)](https://pkg.go.dev/github.com/yylego/protoenum)
 [![Coverage Status](https://img.shields.io/coveralls/github/yylego/protoenum/main.svg)](https://coveralls.io/github/yylego/protoenum?branch=main)
-[![Supported Go Versions](https://img.shields.io/badge/Go-1.25+-lightgrey.svg)](https://go.dev/)
+[![Supported Go Versions](https://img.shields.io/badge/Go-1.25%2B-lightgrey.svg)](https://go.dev/)
 [![GitHub Release](https://img.shields.io/github/release/yylego/protoenum.svg)](https://github.com/yylego/protoenum/releases)
 [![Go Report Card](https://goreportcard.com/badge/github.com/yylego/protoenum)](https://goreportcard.com/report/github.com/yylego/protoenum)
+
+<!-- TEMPLATE (EN) CLOSE: BADGES -->
 
 # protoenum
 
@@ -17,16 +21,15 @@
 
 [中文说明](README.zh.md)
 
-<!-- TEMPLATE (EN) END: LANGUAGE NAVIGATION -->
+<!-- TEMPLATE (EN) CLOSE: LANGUAGE NAVIGATION -->
 
 ## Core Features
 
-🎯 **Smart Enum Management**: Wrap Protobuf enums with Go native enums and custom metadata
-🔗 **Go Native Enum Bridge**: Seamless conversion via `Basic()` method to Go native enum types
-⚡ **Multi-Lookup Support**: Fast code, name, and basic-value lookups
-🔄 **Type-Safe Operations**: Triple generics maintain strict type checks across protobuf, Go native enums, and metadata
-🛡️ **Strict Design**: panics fast on a nil / duplicate; the default is an explicit set-once opt-in
-🌍 **Production Grade**: Battle-tested enum handling in enterprise applications
+- 🎯 **Enum Wrapping**: Wrap Protobuf enums with Go native enums and custom metadata
+- 🔗 **Go Native Enum Bridge**: Conversion via the `Basic()` method to Go native enum types
+- ⚡ **Multi-Lookup Support**: O(1) lookups on proto, code, name, and basic value
+- 🔄 **Type-Safe Operations**: Three generics keep type checks across protobuf, Go native enums, and metadata
+- 🛡️ **Strict Design**: panics fast on a nil / duplicate; the default is an explicit set-once opt-in
 
 ## Installation
 
@@ -56,7 +59,6 @@ import (
 )
 
 // StatusType represents a Go native enum of status
-// StatusType 代表状态的 Go 原生枚举
 type StatusType string
 
 const (
@@ -66,7 +68,6 @@ const (
 )
 
 // Build status enum collection
-// 构建状态枚举集合
 var enums = protoenum.NewEnums(
 	protoenum.NewEnum(protoenumstatus.StatusEnum_UNKNOWN, StatusTypeUnknown),
 	protoenum.NewEnum(protoenumstatus.StatusEnum_SUCCESS, StatusTypeSuccess),
@@ -87,7 +88,7 @@ func main() {
 		}
 	}
 
-	if defaultEnum, ok := enums.GetDefault(); ok {
+	if defaultEnum, ok := enums.Default(); ok {
 		zaplog.LOG.Debug("default", zap.String("msg", string(defaultEnum.Basic())))
 	}
 }
@@ -108,7 +109,6 @@ import (
 )
 
 // ResultType represents a Go native enum of result
-// ResultType 代表结果的 Go 原生枚举
 type ResultType string
 
 const (
@@ -153,6 +153,69 @@ func main() {
 ```
 
 ⬆️ **Source:** [Source](internal/demos/demo2x/main.go)
+
+### Custom Metadata
+
+```go
+package main
+
+import (
+	"github.com/yylego/protoenum"
+	"github.com/yylego/protoenum/protos/protoenumstatus"
+	"github.com/yylego/zaplog"
+	"go.uber.org/zap"
+)
+
+// StatusType represents a Go native enum of status
+type StatusType string
+
+const (
+	StatusTypeUnknown StatusType = "unknown"
+	StatusTypeSuccess StatusType = "success"
+	StatusTypeFailure StatusType = "failure"
+)
+
+// MetaI18n represents a custom metadata type with English/Chinese descriptions
+type MetaI18n struct {
+	zh string // Chinese description
+	en string // English description
+}
+
+func (c *MetaI18n) Chinese() string { return c.zh }
+func (c *MetaI18n) English() string { return c.en }
+
+// Build enum collection with custom English/Chinese metadata
+var enums = protoenum.NewEnums(
+	protoenum.NewEnumWithMeta(protoenumstatus.StatusEnum_UNKNOWN, StatusTypeUnknown, &MetaI18n{zh: "未知", en: "Unknown"}),
+	protoenum.NewEnumWithMeta(protoenumstatus.StatusEnum_SUCCESS, StatusTypeSuccess, &MetaI18n{zh: "成功", en: "Success"}),
+	protoenum.NewEnumWithMeta(protoenumstatus.StatusEnum_FAILURE, StatusTypeFailure, &MetaI18n{zh: "失败", en: "Failure"}),
+).WithDefault()
+
+func main() {
+	if success, ok := enums.GetByBasicFallbackDefault(StatusTypeSuccess); ok {
+		zaplog.LOG.Debug("basic", zap.String("msg", string(success.Basic())))
+		zaplog.LOG.Debug("zh", zap.String("msg", success.Meta().Chinese()))
+		zaplog.LOG.Debug("en", zap.String("msg", success.Meta().English()))
+
+		if success.Basic() == StatusTypeSuccess {
+			zaplog.LOG.Debug("done")
+		}
+	}
+
+	if failure, ok := enums.GetByCodeFallbackDefault(int32(protoenumstatus.StatusEnum_FAILURE)); ok {
+		zaplog.LOG.Debug("basic", zap.String("msg", string(failure.Basic())))
+		zaplog.LOG.Debug("zh", zap.String("msg", failure.Meta().Chinese()))
+		zaplog.LOG.Debug("en", zap.String("msg", failure.Meta().English()))
+	}
+
+	validBasics := enums.ListNonDefaultBasics()
+	for _, basic := range validBasics {
+		zaplog.LOG.Debug("valid", zap.String("basic", string(basic)))
+	}
+}
+```
+
+⬆️ **Source:** [Source](internal/demos/demo3x/main.go)
 
 ## API Reference
 
@@ -210,8 +273,16 @@ The default is an explicit opt-in: `NewEnums` sets none. Chain `WithDefault` onc
 
 | Method                | Description                                              | Returns                  |
 | --------------------- | -------------------------------------------------------- | ------------------------ |
-| `enums.GetDefault()`  | Get the default, returns (default, true) or (nil, false) | `(*Enum[P, B, M], bool)` |
+| `enums.Default()`     | Get the default, returns (default, true) or (nil, false) | `(*Enum[P, B, M], bool)` |
 | `enums.WithDefault()` | Chain: fix the first element as the default, just once   | `*Enums[P, B, M]`        |
+
+### Completeness Check
+
+Chain `CheckComplete` once during construction: each value the proto enum declares must have an element. A value added to the proto and not mapped here panics at startup, naming the missing values.
+
+| Method                  | Description                                             | Returns           |
+| ----------------------- | ------------------------------------------------------- | ----------------- |
+| `enums.CheckComplete()` | Chain: panic when a declared proto value has no element | `*Enums[P, B, M]` |
 
 ## Examples
 
@@ -262,16 +333,19 @@ statusEnums.WithDefault()
 
 ```go
 // Using numeric code - returns (default, true) if not found, (nil, false) if no default
-enum := statusEnums.GetByCodeFallbackDefault(1)
-fmt.Printf("Found: %s\n", enum.Meta().Desc())
+if enum, ok := statusEnums.GetByCodeFallbackDefault(1); ok {
+    fmt.Printf("Found: %s\n", enum.Meta().Desc())
+}
 
 // Using enum name
-enum = statusEnums.GetByNameFallbackDefault("SUCCESS")
-fmt.Printf("Status: %s\n", enum.Meta().Desc())
+if enum, ok := statusEnums.GetByNameFallbackDefault("SUCCESS"); ok {
+    fmt.Printf("Status: %s\n", enum.Meta().Desc())
+}
 
 // Using Go native enum value - type-safe lookup
-enum = statusEnums.GetByBasicFallbackDefault(StatusTypeSuccess)
-fmt.Printf("Basic: %s\n", enum.Basic())
+if enum, ok := statusEnums.GetByBasicFallbackDefault(StatusTypeSuccess); ok {
+    fmt.Printf("Basic: %s\n", enum.Basic())
+}
 
 // Existence check - returns (enum, bool)
 if found, ok := statusEnums.GetByCode(1); ok {
@@ -370,8 +444,8 @@ enums := protoenum.NewEnums(
 )
 enums.WithDefault()
 
-// GetDefault returns (enum, bool)
-if defaultEnum, ok := enums.GetDefault(); ok {
+// Default returns (enum, bool)
+if defaultEnum, ok := enums.Default(); ok {
     fmt.Println(defaultEnum.Basic())
 }
 ```
@@ -385,7 +459,19 @@ if notFound, ok := enums.GetByCodeFallbackDefault(999); ok {  // uses UNKNOWN (t
 }
 
 // The default is fixed once and has no unset. A second WithDefault panics.
-// Without a default, GetByXxxFallbackDefault returns nil on a miss (use GetByXxx instead).
+// Without a default, GetByXxxFallbackDefault returns (nil, false) on a miss.
+```
+
+**Completeness check:**
+
+```go
+// CheckComplete passes: each value StatusEnum declares (UNKNOWN, SUCCESS, FAILURE) has an element
+// Leave FAILURE out and it panics at startup, naming FAILURE
+enums := protoenum.NewEnums(
+    protoenum.NewEnum(protoenumstatus.StatusEnum_UNKNOWN, "unknown"),
+    protoenum.NewEnum(protoenumstatus.StatusEnum_SUCCESS, "success"),
+    protoenum.NewEnum(protoenumstatus.StatusEnum_FAILURE, "failure"),
+).WithDefault().CheckComplete()
 ```
 
 <!-- TEMPLATE (EN) BEGIN: STANDARD PROJECT FOOTER -->
@@ -446,10 +532,4 @@ Welcome to contribute to this project via submitting merge requests and reportin
 
 **Have Fun Coding with this package!** 🎉🎉🎉
 
-<!-- TEMPLATE (EN) END: STANDARD PROJECT FOOTER -->
-
----
-
-## GitHub Stars
-
-[![Stargazers](https://starchart.cc/yylego/protoenum.svg?variant=adaptive)](https://starchart.cc/yylego/protoenum)
+<!-- TEMPLATE (EN) CLOSE: STANDARD PROJECT FOOTER -->

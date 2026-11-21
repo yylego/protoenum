@@ -1,9 +1,13 @@
+<!-- TEMPLATE (ZH) BEGIN: BADGES -->
+
 [![GitHub Workflow Status (branch)](https://img.shields.io/github/actions/workflow/status/yylego/protoenum/release.yml?branch=main&label=BUILD)](https://github.com/yylego/protoenum/actions/workflows/release.yml?query=branch%3Amain)
 [![GoDoc](https://pkg.go.dev/badge/github.com/yylego/protoenum)](https://pkg.go.dev/github.com/yylego/protoenum)
 [![Coverage Status](https://img.shields.io/coveralls/github/yylego/protoenum/main.svg)](https://coveralls.io/github/yylego/protoenum?branch=main)
-[![Supported Go Versions](https://img.shields.io/badge/Go-1.25+-lightgrey.svg)](https://go.dev/)
+[![Supported Go Versions](https://img.shields.io/badge/Go-1.25%2B-lightgrey.svg)](https://go.dev/)
 [![GitHub Release](https://img.shields.io/github/release/yylego/protoenum.svg)](https://github.com/yylego/protoenum/releases)
 [![Go Report Card](https://goreportcard.com/badge/github.com/yylego/protoenum)](https://goreportcard.com/report/github.com/yylego/protoenum)
+
+<!-- TEMPLATE (ZH) CLOSE: BADGES -->
 
 # protoenum
 
@@ -17,16 +21,15 @@
 
 [ENGLISH README](README.md)
 
-<!-- TEMPLATE (ZH) END: LANGUAGE NAVIGATION -->
+<!-- TEMPLATE (ZH) CLOSE: LANGUAGE NAVIGATION -->
 
 ## 核心特性
 
-🎯 **智能枚举管理**：将 Protobuf 枚举与 Go 原生枚举和自定义元数据包装
-🔗 **Go 原生枚举桥接**：通过 `Basic()` 方法无缝转换到 Go 原生枚举类型
-⚡ **多方式查找**：支持代码、名称和 Basic 值快速查找
-🔄 **类型安全操作**：三泛型保持 protobuf、Go 原生枚举和元数据的类型安全
-🛡️ **严格设计**：遇 nil/重复即刻 panic；默认值显式设置、仅一次、可选
-🌍 **生产级别**：经过实战检验的企业级枚举处理方案
+- 🎯 **枚举包装**：将 Protobuf 枚举与 Go 原生枚举和自定义元数据包装在一起
+- 🔗 **Go 原生枚举桥接**：通过 `Basic()` 方法转换到 Go 原生枚举类型
+- ⚡ **多方式查找**：按 proto、代码、名称和 Basic 值 O(1) 查找
+- 🔄 **类型安全操作**：三泛型保持 protobuf、Go 原生枚举和元数据的类型检查
+- 🛡️ **严格设计**：遇 nil/重复即刻 panic；默认值显式设置、仅一次、可选
 
 ## 安装
 
@@ -55,7 +58,6 @@ import (
 	"go.uber.org/zap"
 )
 
-// StatusType represents a Go native enum of status
 // StatusType 代表状态的 Go 原生枚举
 type StatusType string
 
@@ -65,7 +67,6 @@ const (
 	StatusTypeFailure StatusType = "failure"
 )
 
-// Build status enum collection
 // 构建状态枚举集合
 var enums = protoenum.NewEnums(
 	protoenum.NewEnum(protoenumstatus.StatusEnum_UNKNOWN, StatusTypeUnknown),
@@ -87,7 +88,7 @@ func main() {
 		}
 	}
 
-	if defaultEnum, ok := enums.GetDefault(); ok {
+	if defaultEnum, ok := enums.Default(); ok {
 		zaplog.LOG.Debug("default", zap.String("msg", string(defaultEnum.Basic())))
 	}
 }
@@ -107,7 +108,6 @@ import (
 	"go.uber.org/zap"
 )
 
-// ResultType represents a Go native enum of result
 // ResultType 代表结果的 Go 原生枚举
 type ResultType string
 
@@ -153,6 +153,69 @@ func main() {
 ```
 
 ⬆️ **源码:** [源码](internal/demos/demo2x/main.go)
+
+### 自定义元数据
+
+```go
+package main
+
+import (
+	"github.com/yylego/protoenum"
+	"github.com/yylego/protoenum/protos/protoenumstatus"
+	"github.com/yylego/zaplog"
+	"go.uber.org/zap"
+)
+
+// StatusType 代表状态的 Go 原生枚举
+type StatusType string
+
+const (
+	StatusTypeUnknown StatusType = "unknown"
+	StatusTypeSuccess StatusType = "success"
+	StatusTypeFailure StatusType = "failure"
+)
+
+// MetaI18n 代表带有中英文描述的自定义元数据类型
+type MetaI18n struct {
+	zh string // 中文描述
+	en string // 英文描述
+}
+
+func (c *MetaI18n) Chinese() string { return c.zh }
+func (c *MetaI18n) English() string { return c.en }
+
+// 构建带有自定义中英文元数据的枚举集合
+var enums = protoenum.NewEnums(
+	protoenum.NewEnumWithMeta(protoenumstatus.StatusEnum_UNKNOWN, StatusTypeUnknown, &MetaI18n{zh: "未知", en: "Unknown"}),
+	protoenum.NewEnumWithMeta(protoenumstatus.StatusEnum_SUCCESS, StatusTypeSuccess, &MetaI18n{zh: "成功", en: "Success"}),
+	protoenum.NewEnumWithMeta(protoenumstatus.StatusEnum_FAILURE, StatusTypeFailure, &MetaI18n{zh: "失败", en: "Failure"}),
+).WithDefault()
+
+func main() {
+	if success, ok := enums.GetByBasicFallbackDefault(StatusTypeSuccess); ok {
+		zaplog.LOG.Debug("basic", zap.String("msg", string(success.Basic())))
+		zaplog.LOG.Debug("zh", zap.String("msg", success.Meta().Chinese()))
+		zaplog.LOG.Debug("en", zap.String("msg", success.Meta().English()))
+
+		if success.Basic() == StatusTypeSuccess {
+			zaplog.LOG.Debug("done")
+		}
+	}
+
+	if failure, ok := enums.GetByCodeFallbackDefault(int32(protoenumstatus.StatusEnum_FAILURE)); ok {
+		zaplog.LOG.Debug("basic", zap.String("msg", string(failure.Basic())))
+		zaplog.LOG.Debug("zh", zap.String("msg", failure.Meta().Chinese()))
+		zaplog.LOG.Debug("en", zap.String("msg", failure.Meta().English()))
+	}
+
+	validBasics := enums.ListNonDefaultBasics()
+	for _, basic := range validBasics {
+		zaplog.LOG.Debug("valid", zap.String("basic", string(basic)))
+	}
+}
+```
+
+⬆️ **源码:** [源码](internal/demos/demo3x/main.go)
 
 ## API 参考
 
@@ -210,8 +273,16 @@ func main() {
 
 | 方法                  | 说明                                            | 返回值                   |
 | --------------------- | ----------------------------------------------- | ------------------------ |
-| `enums.GetDefault()`  | 获取默认值，返回 (默认值, true) 或 (nil, false) | `(*Enum[P, B, M], bool)` |
+| `enums.Default()`     | 获取默认值，返回 (默认值, true) 或 (nil, false) | `(*Enum[P, B, M], bool)` |
 | `enums.WithDefault()` | 链式：把首元素固定为默认值，仅一次              | `*Enums[P, B, M]`        |
+
+### 完整性检查
+
+构造时链一次 `CheckComplete`：proto 枚举声明的每个值都要有对应元素。proto 里加了新值、这里忘了登记，程序启动时就 panic，并点名缺了哪些值。
+
+| 方法                    | 说明                                   | 返回值            |
+| ----------------------- | -------------------------------------- | ----------------- |
+| `enums.CheckComplete()` | 链式：proto 声明的值有没登记的就 panic | `*Enums[P, B, M]` |
 
 ## 使用示例
 
@@ -262,16 +333,19 @@ statusEnums.WithDefault()
 
 ```go
 // 按数字代码查找（找不到返回 (默认值, true)，无默认值返回 (nil, false)）
-enum := statusEnums.GetByCodeFallbackDefault(1)
-fmt.Printf("找到: %s\n", enum.Meta().Desc())
+if enum, ok := statusEnums.GetByCodeFallbackDefault(1); ok {
+    fmt.Printf("找到: %s\n", enum.Meta().Desc())
+}
 
 // 按枚举名称查找
-enum = statusEnums.GetByNameFallbackDefault("SUCCESS")
-fmt.Printf("状态: %s\n", enum.Meta().Desc())
+if enum, ok := statusEnums.GetByNameFallbackDefault("SUCCESS"); ok {
+    fmt.Printf("状态: %s\n", enum.Meta().Desc())
+}
 
 // 按 Go 原生枚举值查找 - 类型安全查找
-enum = statusEnums.GetByBasicFallbackDefault(StatusTypeSuccess)
-fmt.Printf("Basic: %s\n", enum.Basic())
+if enum, ok := statusEnums.GetByBasicFallbackDefault(StatusTypeSuccess); ok {
+    fmt.Printf("Basic: %s\n", enum.Basic())
+}
 
 // 存在性检查 - 返回 (enum, bool)
 if found, ok := statusEnums.GetByCode(1); ok {
@@ -357,6 +431,12 @@ if found, ok := enums.GetByCode(1); ok {
 **构造后显式设一次默认值：**
 
 ```go
+type StatusType string
+const (
+    StatusTypeUnknown StatusType = "unknown"
+    StatusTypeSuccess StatusType = "success"
+)
+
 // NewEnums 不设默认值；链一次 WithDefault 把首元素(UNKNOWN)固定为兜底
 enums := protoenum.NewEnums(
     protoenum.NewEnumWithDesc(protoenumstatus.StatusEnum_UNKNOWN, StatusTypeUnknown, "未知"),
@@ -364,8 +444,8 @@ enums := protoenum.NewEnums(
 )
 enums.WithDefault()
 
-// GetDefault 返回 (enum, bool)
-if defaultEnum, ok := enums.GetDefault(); ok {
+// Default 返回 (enum, bool)
+if defaultEnum, ok := enums.Default(); ok {
     fmt.Println(defaultEnum.Basic())
 }
 ```
@@ -379,7 +459,19 @@ if notFound, ok := enums.GetByCodeFallbackDefault(999); ok {  // 用 UNKNOWN（�
 }
 
 // 默认值设一次、无取消；再调 WithDefault 会 panic。
-// 不设默认值时，GetByXxxFallbackDefault 查不到返回 nil（请改用 GetByXxx）。
+// 不设默认值时，GetByXxxFallbackDefault 查不到返回 (nil, false)。
+```
+
+**完整性检查：**
+
+```go
+// CheckComplete 通过：StatusEnum 声明的每个值（UNKNOWN、SUCCESS、FAILURE）都有对应元素
+// 漏写 FAILURE 的话，启动时就 panic，并点名 FAILURE
+enums := protoenum.NewEnums(
+    protoenum.NewEnum(protoenumstatus.StatusEnum_UNKNOWN, "unknown"),
+    protoenum.NewEnum(protoenumstatus.StatusEnum_SUCCESS, "success"),
+    protoenum.NewEnum(protoenumstatus.StatusEnum_FAILURE, "failure"),
+).WithDefault().CheckComplete()
 ```
 
 <!-- TEMPLATE (ZH) BEGIN: STANDARD PROJECT FOOTER -->
@@ -440,10 +532,4 @@ MIT 许可证 - 详见 [LICENSE](LICENSE)。
 
 **祝你用这个包编程愉快！** 🎉🎉🎉
 
-<!-- TEMPLATE (ZH) END: STANDARD PROJECT FOOTER -->
-
----
-
-## GitHub 标星点赞
-
-[![Stargazers](https://starchart.cc/yylego/protoenum.svg?variant=adaptive)](https://starchart.cc/yylego/protoenum)
+<!-- TEMPLATE (ZH) CLOSE: STANDARD PROJECT FOOTER -->
